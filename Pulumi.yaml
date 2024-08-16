@@ -1,0 +1,10 @@
+name: Nexus
+runtime:
+  name: nodejs
+  options:
+    packagemanager: npm
+description: ensure that when the sqs feeds into the lambda, a python file is executed
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: https://www.pulumi.com/ai/api/project/62cf61e7-44bc-463d-96a6-d57fd651d446.zip

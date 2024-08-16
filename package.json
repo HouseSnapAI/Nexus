@@ -1,0 +1,13 @@
+{
+  "name": "Nexus",
+  "description": "ensure that when the sqs feeds into the lambda, a python file is executed",
+  "main": "index.ts",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "dependencies": {
+    "@pulumi/pulumi": "*",
+    "@pulumi/aws": "6.13.3"
+  }
+}
