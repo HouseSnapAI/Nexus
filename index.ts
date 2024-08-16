@@ -50,7 +50,7 @@ const queuePolicy = new aws.iam.RolePolicy("queuePolicy", {
 
 // Create the Lambda function
 const lambda = new aws.lambda.Function("NexusLambda", {
-    runtime: aws.lambda.Runtime.Python3d10,
+    runtime: aws.lambda.Runtime.Python3d11,
     role: role.arn,
     handler: "index.handler",
     code: new pulumi.asset.AssetArchive({
