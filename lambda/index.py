@@ -2,7 +2,8 @@ import json
 
 def handler(event, context):
     for record in event['Records']:
-        body = json.loads(record['body'])
+        body = record.get('body', '')
+        
         # Process the body payload
         print(f"Processing message: {body}")
         # Add your Python script logic here
