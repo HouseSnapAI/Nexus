@@ -29,9 +29,28 @@ const rolePolicyAttachment = new aws.iam.RolePolicyAttachment("lambdaRoleAttachm
     policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
 });
 
+// Add a policy to allow the Lambda function to read messages from the SQS queue
+const queuePolicy = new aws.iam.RolePolicy("queuePolicy", {
+    role: role.id,
+    policy: queue.arn.apply(queueArn => JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+            {
+                Effect: "Allow",
+                Action: [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                ],
+                Resource: queueArn,
+            },
+        ],
+    })),
+});
+
 // Create the Lambda function
 const lambda = new aws.lambda.Function("NexusLambda", {
-    runtime: aws.lambda.Python3d8Runtime,
+    runtime: aws.lambda.Runtime.Python3d8,
     role: role.arn,
     handler: "index.handler",
     code: new pulumi.asset.AssetArchive({
@@ -49,7 +68,6 @@ const eventSourceMapping = new aws.lambda.EventSourceMapping("eventSourceMapping
     eventSourceArn: queue.arn,
     functionName: lambda.name,
     batchSize: 10,
-    startingPosition: "LATEST",
 });
 
 // Export the queue URL and the Lambda function name
