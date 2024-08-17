@@ -1,7 +1,7 @@
 # Define function directory
 ARG FUNCTION_DIR="/lambda"
 
-FROM mcr.microsoft.com/playwright/python:v1.46.0-focal AS build-image
+FROM python:3.11-bookworm
 
 # Install aws-lambda-cpp build dependencies
 RUN apt-get update && \
@@ -10,7 +10,9 @@ RUN apt-get update && \
     make \
     cmake \
     unzip \
-    libcurl4-openssl-dev
+    libcurl4-openssl-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Include global arg in this stage of the build
 ARG FUNCTION_DIR
@@ -21,25 +23,16 @@ RUN mkdir -p ${FUNCTION_DIR}
 COPY lambda/* ${FUNCTION_DIR}
 
 # Install the runtime interface client and other dependencies
-RUN pip3 install  \
+RUN pip install  \
     --target ${FUNCTION_DIR} \
     awslambdaric && \
-    pip3 install -r ${FUNCTION_DIR}/requirements.txt --target ${FUNCTION_DIR}
+    pip install -r ${FUNCTION_DIR}/requirements.txt --target ${FUNCTION_DIR}
 
-# Install Playwright
-RUN pip3 install playwright && \
-    playwright install
+RUN pip install playwright==1.46.0 && \
+    playwright install --with-deps
 
-# Multi-stage build: grab a fresh copy of the base image
-FROM mcr.microsoft.com/playwright/python:v1.46.0-focal
-
-# Include global arg in this stage of the build
-ARG FUNCTION_DIR
 # Set working directory to function root directory
 WORKDIR ${FUNCTION_DIR}
-
-# Copy in the build image dependencies
-COPY --from=build-image ${FUNCTION_DIR} ${FUNCTION_DIR}
 
 ENV PYTHONPATH=${FUNCTION_DIR}
 
@@ -48,7 +41,8 @@ ADD https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/latest
 RUN chmod +x /usr/local/bin/aws-lambda-rie
 
 # Use the RIE to run the Lambda function if running locally
-ENTRYPOINT ["/usr/local/bin/aws-lambda-rie", "python3", "-m", "awslambdaric", "index.handler"]
+# ENTRYPOINT ["/usr/local/bin/aws-lambda-rie", "python3", "-m", "awslambdaric"]
+# ENTRYPOINT [ "/usr/local/bin/python", "-m", "awslambdaric" ]
 
 # Use the AWS Lambda runtime interface client to start the function
-CMD ["python3", "-m", "awslambdaric", "index.handler"]
+CMD ["index.handler"]

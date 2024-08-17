@@ -6,3 +6,4 @@
 .env.*
 python/
 venv/
+updatedvenv/

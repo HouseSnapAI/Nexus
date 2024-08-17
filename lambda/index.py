@@ -11,10 +11,20 @@ from pandas.tseries.offsets import DateOffset
 import datetime
 import requests
 
+# THESE NEED TO BE THESE VERSIONS
+# realtime=1.0.6
+# supabase=2.6.0
+
 # Initialize Supabase client
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+
+def install_dependencies():
+    subprocess.check_call(["pip", "install", "playwright"])
+    subprocess.check_call(["playwright", "install"])
+    
 
 def calculate_crime_score(county: str, city: str, report_id: str):
 
@@ -107,7 +117,7 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
         browser = p.chromium.launch(headless=True)  # Set headless=True for headless mode
         page = browser.new_page()
         print(f"Navigating to URL: {url}")  # Debugging statement
-        page.goto(url, timeout=60000)  # Increase timeout to 60 seconds
+        page.goto(url, timeout=120000)  # Increase timeout to 60 seconds
         page.wait_for_load_state("domcontentloaded")  # Wait for DOM content to load
         # Alternatively, wait for a specific element
         # page.wait_for_selector("selector_of_an_element_on_the_page")
@@ -383,7 +393,9 @@ def fetch_city_census_data(city_name, report_id):
 
 def handler(event, context):
     for record in event['Records']:
+        print("RUNNIN CODE!!")
         body = record.get('body', '')
+        print(body)
         report_id = body['report_id']
         listing = body['listing']
 
@@ -395,6 +407,8 @@ def handler(event, context):
         lat = listing['latitude']
         long = listing['longitude']
         address = f'{street_line},{city},{state} {zipcode}'
+
+        # install_dependencies()
 
         # CRIME SCORE
         crime_score, data_to_process = calculate_crime_score(county, city, report_id)
