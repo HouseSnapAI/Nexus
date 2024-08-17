@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import * as archiver from "archiver";
 import * as dotenv from "dotenv";
+import { execSync } from "child_process";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -58,6 +59,9 @@ const queuePolicy = new aws.iam.RolePolicy("queuePolicy", {
 // Create a zip file with the Lambda function and its dependencies
 const lambdaDir = path.join(__dirname, "lambda");
 const zipFilePath = path.join(__dirname, "lambda.zip");
+
+// Install dependencies for the correct architecture
+execSync(`pip3 install -r ${path.join(lambdaDir, "requirements.txt")} --platform manylinux2014_x86_64 --target ${lambdaDir} --only-binary=:all:`);
 
 const output = fs.createWriteStream(zipFilePath);
 const archive = archiver("zip", {
