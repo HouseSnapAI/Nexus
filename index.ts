@@ -61,7 +61,7 @@ const lambdaDir = path.join(__dirname, "lambda");
 const zipFilePath = path.join(__dirname, "lambda.zip");
 
 // Install dependencies for the correct architecture
-execSync(`pip3 install -r ${path.join(lambdaDir, "requirements.txt")} --platform manylinux2014_x86_64 --target ${lambdaDir} --only-binary=:all:`);
+execSync(`pip install -r ${path.join(lambdaDir, "requirements.txt")} --platform manylinux2014_x86_64 --target ${lambdaDir} --only-binary=:all:`);
 
 const output = fs.createWriteStream(zipFilePath);
 const archive = archiver("zip", {
