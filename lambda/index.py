@@ -1,12 +1,20 @@
 import json
 import os
+import subprocess
+import sys
 from supabase import create_client, Client
+from playwright.sync_api import sync_playwright
+
 
 # Initialize Supabase client
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+
+# Function to install dependencies
+def install_dependencies():
+    subprocess.check_call(["playwright", "install"])
 
 def calculate_crime_score(county: str, city: str, report_id: str):
 
@@ -88,6 +96,100 @@ def calculate_crime_score(county: str, city: str, report_id: str):
 
     return crime_score, data_to_process
 
+def scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id):
+    url = f"https://www.schooldigger.com/go/CA/search.aspx?searchtype=11&address={street_line.replace(' ', '+')}&city={city.replace(' ', '+')}&state={state}&zip={zipcode}&lat={lat}&long={long}"
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=False)  # Set headless=True for headless mode
+        page = browser.new_page()
+        print(f"Navigating to URL: {url}")  # Debugging statement
+        page.goto(url, timeout=60000)  # Increase timeout to 60 seconds
+        page.wait_for_load_state("domcontentloaded")  # Wait for DOM content to load
+        # Alternatively, wait for a specific element
+        # page.wait_for_selector("selector_of_an_element_on_the_page")
+        print("Page loaded.")  # Debugging statement
+
+        # Wait for the table tab to be clickable and click it
+        page.wait_for_selector("xpath=/html/body/form/div[5]/div[5]/ul/li[4]/a")
+        page.click("xpath=/html/body/form/div[5]/div[5]/ul/li[4]")
+        print("Clicked on the table tab.")  # Debugging statement
+
+        # Wait for the all button to be clickable and click it
+        page.wait_for_selector("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]")
+        page.click("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]")
+        print("Clicked on the 'All' button.")  # Debugging statement
+        print("Waiting for the page to update...")  # Debugging statement
+        page.wait_for_timeout(2000)
+
+        # Scrape the table data
+        print("Scraping table data...")  # Debugging statement
+        table = page.query_selector("table.table.table-hover.table-condensed.table-striped.table-bordered.gSurvey.dataTable.no-footer")
+        rows = page.query_selector_all('//*[@id="tabSchooList"]/tbody/tr')  # Get all rows from the specified XPath
+        
+        school_data = []
+        headers = [header.inner_text() for header in page.query_selector_all('//*[@id="tabSchooList_wrapper"]/div/div[2]/div/div[1]/div/table/thead/tr[2]/th')]  # Extract headers from specified XPath
+        for row in rows:  # Iterate through all rows
+            cols = row.query_selector_all("td")  # Get all columns in the current row
+            row_data = {headers[i]: col.inner_text() for i, col in enumerate(cols)}  # Map headers to data
+            school_data.append(row_data)  # Append the row data as a dictionary
+        print("Data scraped successfully.")  # Debugging statement
+
+
+        return calculate_school_data(school_data, report_id)
+
+def calculate_school_data(school_data, report_id):
+
+    # TODO: REFINE
+    def calculate_school_score(school):
+        max_score = 100 
+        score = 0
+
+        if school["State Percentile (2023)"]:
+            score += float(school["State Percentile (2023)"].strip('%')) / 10
+        if school["Average Standard Score (2023)"]:
+            score += float(school["Average Standard Score (2023)"])
+        if school["Distance"]:
+            score -= float(school["Distance"].strip('mi')) * 2  
+        if school["Student/\nTeacher Ratio"]:
+            score += 100 / float(school["Student/\nTeacher Ratio"])
+        
+        score = max(0, min(score, max_score))
+        return score
+
+    # Calculate scores for all schools
+    for school in school_data:
+        school["Score"] = calculate_school_score(school)
+
+
+    # Sort schools by distance
+    school_data.sort(key=lambda x: float(x["Distance"].strip('mi')))
+
+    def grade_in_range(grade_range, target_grade):
+        start, end = grade_range.split('-')
+        start = 0 if start == 'K' else int(start)
+        end = int(end)
+        return start <= target_grade <= end
+
+    # Separate the closest 2 elementary, middle, and high schools based on grades
+    closest_schools = {
+        "elementary": [school for school in school_data if grade_in_range(school["Grades"], 3)][:2],
+        "middle": [school for school in school_data if grade_in_range(school["Grades"], 7)][:2],
+        "high": [school for school in school_data if grade_in_range(school["Grades"], 10)][:2]
+    }
+
+    # Sort schools by score in descending order
+    top_schools = sorted(school_data, key=lambda x: x["Score"], reverse=True)[:3]
+
+    # Calculate the average score of the top 3 schools
+    average_top_3_score = sum(school["Score"] for school in top_schools) / 3
+
+    # Update Supabase row in table 'reports' with id = report_id with 'school_score' and 'top_schools'
+    supabase.table('reports').update({
+        'school_score': average_top_3_score,
+        'top_schools': closest_schools
+    }).eq('id', report_id).execute()
+
+    return average_top_3_score
 
 def handler(event, context):
     for record in event['Records']:
@@ -95,9 +197,18 @@ def handler(event, context):
         report_id = body['report_id']
         county = body['county']
         city = body['city']
+        street_line = body['street_line']
+        state = body['state']
+        zipcode = body['zipcode']
+        lat = body['latitude']
+        long = body['longitude']
+
+        install_dependencies()
+
 
         # CRIME SCORE
         crime_score, data_to_process = calculate_crime_score(county, city, report_id)
+        school_score = scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
 
 
         # Process the body payload
