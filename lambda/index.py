@@ -22,7 +22,6 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 
 def install_dependencies():
-    subprocess.check_call(["pip", "install", "playwright"])
     subprocess.check_call(["playwright", "install"])
     
 
