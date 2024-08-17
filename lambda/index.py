@@ -195,21 +195,27 @@ def handler(event, context):
     for record in event['Records']:
         body = record.get('body', '')
         report_id = body['report_id']
-        county = body['county']
-        city = body['city']
-        street_line = body['street_line']
-        state = body['state']
-        zipcode = body['zipcode']
-        lat = body['latitude']
-        long = body['longitude']
+        listing = body['listing']
+
+        county = listing['county']
+        city = listing['city']
+        street_line = listing['street_line']
+        state = listing['state']
+        zipcode = listing['zipcode']
+        lat = listing['latitude']
+        long = listing['longitude']
 
         install_dependencies()
 
 
         # CRIME SCORE
         crime_score, data_to_process = calculate_crime_score(county, city, report_id)
-        school_score = scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
+        print(f"Crime score: {crime_score}")
+        print(f"Data to process: {data_to_process}")
 
+        # SCHOOL SCORE
+        school_score = scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
+        print(f"School score: {school_score}")
 
         # Process the body payload
         print(f"Processing message: {body}")
