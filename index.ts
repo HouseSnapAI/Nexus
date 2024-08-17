@@ -1,10 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import * as fs from "fs";
+import * as docker from "@pulumi/docker";
 import * as path from "path";
-import * as archiver from "archiver";
 import * as dotenv from "dotenv";
-import { execSync } from "child_process";
 
 // Load environment variables from .env file
 dotenv.config();
@@ -56,42 +54,27 @@ const queuePolicy = new aws.iam.RolePolicy("queuePolicy", {
     })),
 });
 
-// Create a zip file with the Lambda function and its dependencies
-const lambdaDir = path.join(__dirname, "lambda");
-const zipFilePath = path.join(__dirname, "lambda.zip");
+// Create an ECR repository
+const repo = new aws.ecr.Repository("my-lambda-repo");
 
-// Install dependencies for the correct architecture
-execSync(`pip3 install -r ${path.join(lambdaDir, "requirements.txt")} --platform manylinux2014_x86_64 --target ${lambdaDir} --only-binary=:all:`);
-
-const output = fs.createWriteStream(zipFilePath);
-const archive = archiver("zip", {
-    zlib: { level: 9 }
+// Build and publish the Docker image
+const image = new docker.Image("my-lambda-image", {
+    build: {
+        context: path.join(__dirname, "lambda"),
+    },
+    imageName: pulumi.interpolate`${repo.repositoryUrl}:latest`,
+    registry: {
+        server: repo.repositoryUrl,
+        username: aws.ecr.getAuthorizationToken().then(token => token.userName),
+        password: aws.ecr.getAuthorizationToken().then(token => token.password),
+    },
 });
-
-output.on("close", function () {
-    console.log(archive.pointer() + " total bytes");
-    console.log("archiver has been finalized and the output file descriptor has closed.");
-});
-
-archive.on("error", function (err:any) {
-    throw err;
-});
-
-archive.pipe(output);
-
-// Add Lambda function code
-archive.directory(lambdaDir, false);
-
-// Add dependencies
-archive.file(path.join(lambdaDir, "requirements.txt"), { name: "requirements.txt" });
-archive.finalize();
 
 // Create the Lambda function
 const lambda = new aws.lambda.Function("NexusLambda", {
-    runtime: aws.lambda.Runtime.Python3d11,
+    packageType: "Image",
+    imageUri: image.imageName,
     role: role.arn,
-    handler: "index.handler",
-    code: new pulumi.asset.FileArchive(zipFilePath),
     environment: {
         variables: {
             SUPABASE_URL: process.env.SUPABASE_URL!,

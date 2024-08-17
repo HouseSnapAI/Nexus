@@ -1,5 +1,5 @@
 {
-  "name": "Nexus",
+  "name": "nexus",
   "description": "ensure that when the sqs feeds into the lambda, a python file is executed",
   "main": "index.ts",
   "scripts": {
@@ -8,6 +8,7 @@
   "author": "",
   "dependencies": {
     "@pulumi/aws": "^6.13.3",
+    "@pulumi/docker": "^4.5.5",
     "@pulumi/pulumi": "^3.129.0",
     "@types/archiver": "^6.0.2",
     "archiver": "^7.0.1",

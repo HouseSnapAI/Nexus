@@ -32,8 +32,12 @@ def calculate_crime_score(county: str, city: str, report_id: str):
     city_data = [item for item in response.data if city.lower() in item['agency_name'].lower()]
     county_data = [item for item in response.data if county.lower() in item['agency_name'].lower() and city.lower() not in item['agency_name'].lower()]
 
+    # Combine city_data and county_data
+    combined_data = city_data + county_data
+
     crime_data_ids = []
-    for item in data_to_process:
+    # Append crime_data_ids from combined_data
+    for item in combined_data:
         crime_data_ids.append(item['id'])
     
     # Process city data if available, otherwise process county data
