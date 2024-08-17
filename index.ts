@@ -1,6 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import * as docker from "@pulumi/docker";
 import * as path from "path";
 import * as dotenv from "dotenv";
 
@@ -35,45 +34,52 @@ const rolePolicyAttachment = new aws.iam.RolePolicyAttachment("lambdaRoleAttachm
     policyArn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
 });
 
-// Add a policy to allow the Lambda function to read messages from the SQS queue
-const queuePolicy = new aws.iam.RolePolicy("queuePolicy", {
-    role: role.id,
-    policy: queue.arn.apply(queueArn => JSON.stringify({
+// Attach the AmazonEC2ContainerRegistryReadOnly policy to the role
+const ecrReadOnlyPolicyAttachment = new aws.iam.RolePolicyAttachment("ecrReadOnlyPolicyAttachment", {
+    role: role.name,
+    policyArn: "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
+});
+
+// Attach the AmazonEC2ContainerRegistryPowerUser policy to the role
+const ecrPowerUserPolicyAttachment = new aws.iam.RolePolicyAttachment("ecrPowerUserPolicyAttachment", {
+    role: role.name,
+    policyArn: "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPowerUser",
+});
+
+// Create a more comprehensive ECR access policy
+const ecrAccessPolicy = new aws.iam.Policy("ecrAccessPolicy", {
+    description: "Policy for Lambda to access ECR",
+    policy: JSON.stringify({
         Version: "2012-10-17",
         Statement: [
             {
                 Effect: "Allow",
                 Action: [
-                    "sqs:ReceiveMessage",
-                    "sqs:DeleteMessage",
-                    "sqs:GetQueueAttributes"
+                    "ecr:GetAuthorizationToken",
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:GetDownloadUrlForLayer",
+                    "ecr:BatchGetImage",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:UploadLayerPart",
+                    "ecr:CompleteLayerUpload",
+                    "ecr:PutImage"
                 ],
-                Resource: queueArn,
-            },
-        ],
-    })),
+                Resource: "*"
+            }
+        ]
+    })
 });
 
-// Create an ECR repository
-const repo = new aws.ecr.Repository("my-lambda-repo");
-
-// Build and publish the Docker image
-const image = new docker.Image("my-lambda-image", {
-    build: {
-        context: path.join(__dirname, "lambda"),
-    },
-    imageName: pulumi.interpolate`${repo.repositoryUrl}:latest`,
-    registry: {
-        server: repo.repositoryUrl,
-        username: aws.ecr.getAuthorizationToken().then(token => token.userName),
-        password: aws.ecr.getAuthorizationToken().then(token => token.password),
-    },
+// Attach the ECR access policy to the Lambda execution role
+const ecrPolicyAttachment = new aws.iam.RolePolicyAttachment("ecrPolicyAttachment", {
+    role: role.name,
+    policyArn: ecrAccessPolicy.arn,
 });
 
 // Create the Lambda function
 const lambda = new aws.lambda.Function("NexusLambda", {
     packageType: "Image",
-    imageUri: image.imageName,
+    imageUri: "767397951738.dkr.ecr.us-west-1.amazonaws.com/nexus-engine:latest",
     role: role.arn,
     environment: {
         variables: {
@@ -81,6 +87,8 @@ const lambda = new aws.lambda.Function("NexusLambda", {
             SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY!,
         },
     },
+}, {
+    dependsOn: [ecrPolicyAttachment], // Ensure the policy is attached before creating the Lambda
 });
 
 // Create an Event Source Mapping to trigger the Lambda function from the SQS Queue

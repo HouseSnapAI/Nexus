@@ -11,11 +11,6 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-
-# Function to install dependencies
-def install_dependencies():
-    subprocess.check_call(["playwright", "install"])
-
 def calculate_crime_score(county: str, city: str, report_id: str):
 
     # Example query to fetch data from a table
@@ -104,7 +99,7 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
     url = f"https://www.schooldigger.com/go/CA/search.aspx?searchtype=11&address={street_line.replace(' ', '+')}&city={city.replace(' ', '+')}&state={state}&zip={zipcode}&lat={lat}&long={long}"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)  # Set headless=True for headless mode
+        browser = p.chromium.launch(headless=True)  # Set headless=True for headless mode
         page = browser.new_page()
         print(f"Navigating to URL: {url}")  # Debugging statement
         page.goto(url, timeout=60000)  # Increase timeout to 60 seconds
@@ -203,14 +198,11 @@ def handler(event, context):
 
         county = listing['county']
         city = listing['city']
-        street_line = listing['street_line']
+        street_line = listing['street']
         state = listing['state']
-        zipcode = listing['zipcode']
+        zipcode = listing['zip_code']
         lat = listing['latitude']
         long = listing['longitude']
-
-        install_dependencies()
-
 
         # CRIME SCORE
         crime_score, data_to_process = calculate_crime_score(county, city, report_id)
