@@ -11,6 +11,7 @@ deprecation==2.1.0
 exceptiongroup==1.2.2
 frozenlist==1.4.1
 gotrue==2.7.0
+greenlet==3.0.3
 h11==0.14.0
 h2==4.1.0
 hpack==4.0.0
@@ -20,9 +21,11 @@ hyperframe==6.0.1
 idna==3.7
 multidict==6.0.5
 packaging==24.1
+playwright==1.46.0
 postgrest==0.16.10
 pydantic==2.8.2
 pydantic_core==2.20.1
+pyee==11.1.0
 python-dateutil==2.9.0.post0
 realtime==2.0.0
 six==1.16.0
