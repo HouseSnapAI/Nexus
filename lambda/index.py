@@ -18,7 +18,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 
 # Function to install dependencies
-def install_dependencies():
+def install_dependencies():  
     subprocess.check_call(["playwright", "install"])
 
 def calculate_crime_score(county: str, city: str, report_id: str):
