@@ -20,6 +20,52 @@ SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
+args = [
+    '--disable-web-security',
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--no-zygote',
+    '--single-process',
+    '--disable-software-rasterizer',
+    '--disable-extensions',
+    '--disable-background-networking',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-breakpad',
+    '--disable-client-side-phishing-detection',
+    '--disable-component-extensions-with-background-pages',
+    '--disable-default-apps',
+    '--disable-features=TranslateUI,BlinkGenPropertyTrees',
+    '--disable-hang-monitor',
+    '--disable-ipc-flooding-protection',
+    '--disable-popup-blocking',
+    '--disable-prompt-on-repost',
+    '--disable-renderer-backgrounding',
+    '--disable-sync',
+    '--force-color-profile=srgb',
+    '--metrics-recording-only',
+    '--no-first-run',
+    '--safebrowsing-disable-auto-update',
+    '--enable-automation',
+    '--password-store=basic',
+    '--use-mock-keychain',
+    '--disable-component-update',
+    '--disable-domain-reliability',
+    '--disable-print-preview',
+    '--disable-site-isolation-trials',
+    '--disable-speech-api',
+    '--disk-cache-size=33554432',
+    '--enable-features=SharedArrayBuffer',
+    '--hide-scrollbars',
+    '--ignore-gpu-blocklist',
+    '--mute-audio',
+    '--no-default-browser-check',
+    '--no-pings',
+    '--window-size=1920,1080',
+]
+
 
 def install_dependencies():
     subprocess.check_call(["pip", "install", "playwright"])
@@ -114,42 +160,50 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
     url = f"https://www.schooldigger.com/go/CA/search.aspx?searchtype=11&address={street_line.replace(' ', '+')}&city={city.replace(' ', '+')}&state={state}&zip={zipcode}&lat={lat}&long={long}"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)  # Set headless=True for headless mode
-        page = browser.new_page()
-        print(f"Navigating to URL: {url}")  # Debugging statement
-        page.goto(url, timeout=120000)  # Increase timeout to 60 seconds
-        page.wait_for_load_state("domcontentloaded")  # Wait for DOM content to load
-        # Alternatively, wait for a specific element
-        # page.wait_for_selector("selector_of_an_element_on_the_page")
-        print("Page loaded.")  # Debugging statement
+        try:
+            print("Launching browser...")
+            browser = p.chromium.launch(headless=True, args=args, timeout=120000)  # Increase timeout to 60 seconds
+            print("Browser launched successfully.")
+            
+            page = browser.new_page()
+            print(f"Navigating to URL: {url}")  # Debugging statement
+            page.goto(url, timeout=120000)  # Increase timeout to 120 seconds
+            page.wait_for_load_state("domcontentloaded")  # Wait for DOM content to load
+            print("Page loaded.")  # Debugging statement
 
-        # Wait for the table tab to be clickable and click it
-        page.wait_for_selector("xpath=/html/body/form/div[5]/div[5]/ul/li[4]/a")
-        page.click("xpath=/html/body/form/div[5]/div[5]/ul/li[4]")
-        print("Clicked on the table tab.")  # Debugging statement
+            # Wait for the table tab to be clickable and click it
+            page.wait_for_selector("xpath=/html/body/form/div[5]/div[5]/ul/li[4]/a")
+            page.click("xpath=/html/body/form/div[5]/div[5]/ul/li[4]")
+            print("Clicked on the table tab.")  # Debugging statement
 
-        # Wait for the all button to be clickable and click it
-        page.wait_for_selector("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]")
-        page.click("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]")
-        print("Clicked on the 'All' button.")  # Debugging statement
-        print("Waiting for the page to update...")  # Debugging statement
-        page.wait_for_timeout(2000)
+            # Wait for the all button to be clickable and click it
+            page.wait_for_selector("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]")
+            page.click("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]")
+            print("Clicked on the 'All' button.")  # Debugging statement
+            print("Waiting for the page to update...")  # Debugging statement
+            page.wait_for_timeout(2000)
 
-        # Scrape the table data
-        print("Scraping table data...")  # Debugging statement
-        table = page.query_selector("table.table.table-hover.table-condensed.table-striped.table-bordered.gSurvey.dataTable.no-footer")
-        rows = page.query_selector_all('//*[@id="tabSchooList"]/tbody/tr')  # Get all rows from the specified XPath
-        
-        school_data = []
-        headers = [header.inner_text() for header in page.query_selector_all('//*[@id="tabSchooList_wrapper"]/div/div[2]/div/div[1]/div/table/thead/tr[2]/th')]  # Extract headers from specified XPath
-        for row in rows:  # Iterate through all rows
-            cols = row.query_selector_all("td")  # Get all columns in the current row
-            row_data = {headers[i]: col.inner_text() for i, col in enumerate(cols)}  # Map headers to data
-            school_data.append(row_data)  # Append the row data as a dictionary
-        print("Data scraped successfully.")  # Debugging statement
+            # Scrape the table data
+            print("Scraping table data...")  # Debugging statement
+            table = page.query_selector("table.table.table-hover.table-condensed.table-striped.table-bordered.gSurvey.dataTable.no-footer")
+            rows = page.query_selector_all('//*[@id="tabSchooList"]/tbody/tr')  # Get all rows from the specified XPath
 
+            school_data = []
+            headers = [header.inner_text() for header in page.query_selector_all('//*[@id="tabSchooList_wrapper"]/div/div[2]/div/div[1]/div/table/thead/tr[2]/th')]  # Extract headers from specified XPath
+            for row in rows:  # Iterate through all rows
+                cols = row.query_selector_all("td")  # Get all columns in the current row
+                row_data = {headers[i]: col.inner_text() for i, col in enumerate(cols)}  # Map headers to data
+                school_data.append(row_data)  # Append the row data as a dictionary
+            print("Data scraped successfully.")  # Debugging statement
 
-        return calculate_school_data(school_data, report_id)
+            browser.close()
+
+            return calculate_school_data(school_data, report_id)
+        except Exception as e:
+            print(f"Error in scrape_schooldigger: {str(e)}")
+            if 'browser' in locals():
+                browser.close()
+            raise
 
 def calculate_school_data(school_data, report_id):
 
