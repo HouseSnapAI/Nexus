@@ -369,7 +369,7 @@ def get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_da
     print("Rent cash flow successfully upload")
     return rent_cash_flow
 
-def get_average_days_on_market(address):
+def get_sales_volume(address):
     listing_type = "sold"
     sales_volume_six_months = []
     for i in range(1,6):
