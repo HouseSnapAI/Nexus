@@ -9,6 +9,10 @@ ENV PYTHONUNBUFFERED=1
 ENV PLAYWRIGHT_BROWSERS_PATH=${FUNCTION_DIR}/ms-playwright
 
 # Install aws-lambda-cpp build dependencies
+# Set environment variables
+
+
+# Install aws-lambda-cpp build dependencies
 RUN apt-get update && \
     apt-get install -y \
     g++ \
@@ -37,6 +41,10 @@ RUN apt-get update && \
 
 # Include global arg in this stage of the build
 ARG FUNCTION_DIR
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV PLAYWRIGHT_BROWSERS_PATH=${FUNCTION_DIR}/ms-playwright
 # Create function directory
 RUN mkdir -p ${FUNCTION_DIR}
 
@@ -55,17 +63,20 @@ RUN cd ${FUNCTION_DIR} && \
     PLAYWRIGHT_BROWSERS_PATH=${FUNCTION_DIR}/ms-playwright python -m playwright install --with-deps chromium && \
     cd -
 
+
 # Set working directory to function root directory
 WORKDIR ${FUNCTION_DIR}
 
 ENV PYTHONPATH=${FUNCTION_DIR}
 
 # Download the AWS Lambda Runtime Interface Emulator (RIE) if running locally
-# ADD https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/latest/download/aws-lambda-rie /usr/local/bin/aws-lambda-rie
-# RUN chmod +x /usr/local/bin/aws-lambda-rie
+#ADD https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/latest/download/aws-lambda-rie /usr/local/bin/aws-lambda-rie
+#RUN chmod +x /usr/local/bin/aws-lambda-rie
 
 # Use the RIE to run the Lambda function if running locally
-# ENTRYPOINT ["/usr/local/bin/aws-lambda-rie", "python3", "-m", "awslambdaric"]
+#ENTRYPOINT ["/usr/local/bin/aws-lambda-rie", "python3", "-m", "awslambdaric"]
+# ENTRYPOINT [ "/usr/local/bin/python", "-m", "awslambdaric" ]
 
 # Use the AWS Lambda runtime interface client to start the function
-CMD ["index.handler"]
+CMD ["python3", "-m", "awslambdaric", "index.handler"]
+#CMD [ "index.handler" ]

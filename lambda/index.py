@@ -11,6 +11,11 @@ from pandas.tseries.offsets import DateOffset
 import datetime
 import requests
 
+
+
+args=['--no-sandbox', '--disable-setuid-sandbox','--disable-gpu','--single-process']
+
+
 # THESE NEED TO BE THESE VERSIONS
 # realtime=1.0.6
 # supabase=2.6.0
@@ -68,7 +73,6 @@ args = [
 
 
 def install_dependencies():
-    subprocess.check_call(["pip", "install", "playwright"])
     subprocess.check_call(["playwright", "install"])
     
 
@@ -406,7 +410,7 @@ def fetch_city_census_data(city_name, report_id):
     census_data = fetch_census_data(table_ids, geo_id)
 
     # Dictionary to hold the structured data
-    census_data = {}
+    structured_data = {}
 
     # Iterate over the tables and data
     for table_id, table_content in census_data['data'][geo_id].items():
@@ -417,8 +421,8 @@ def fetch_city_census_data(city_name, report_id):
         table_description = table_info.get('Description', 'No description available')
 
         # Initialize the structure for this table if not already initialized
-        if table_id not in census_data:
-            census_data[table_id] = {
+        if table_id not in structured_data:
+            structured_data[table_id] = {
                 "Table Title": table_title,
                 "Table Description": table_description,
                 "Columns": []
@@ -428,7 +432,7 @@ def fetch_city_census_data(city_name, report_id):
         for column_id, estimate in table_content['estimate'].items():
             description = table_columns[column_id]['name']
             error = table_content['error'].get(column_id, None)
-            census_data[table_id]["Columns"].append({
+            structured_data[table_id]["Columns"].append({
                 "Column ID": column_id,
                 "Description": description,
                 "Estimate": estimate,
@@ -440,10 +444,10 @@ def fetch_city_census_data(city_name, report_id):
     print(f"Appended census data: {geo_entry['name']}")
 
     supabase.table('reports').update({
-        'census_data': json.dumps(census_data)
+        'census_data': json.dumps(structured_data)
     }).eq('id', report_id).execute()
     # Return the structured data
-    return census_data
+    return structured_data
 
 def handler(event, context):
     for record in event['Records']:
