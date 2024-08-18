@@ -11,71 +11,14 @@ from pandas.tseries.offsets import DateOffset
 from datetime import datetime
 import requests
 
-
-
 args=['--no-sandbox', '--disable-setuid-sandbox','--disable-gpu','--single-process']
 
-
-# THESE NEED TO BE THESE VERSIONS
-# realtime=1.0.6
-# supabase=2.6.0
 
 # Initialize Supabase client
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-
-args = [
-    '--disable-web-security',
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
-    '--no-zygote',
-    '--single-process',
-    '--disable-software-rasterizer',
-    '--disable-extensions',
-    '--disable-background-networking',
-    '--disable-background-timer-throttling',
-    '--disable-backgrounding-occluded-windows',
-    '--disable-breakpad',
-    '--disable-client-side-phishing-detection',
-    '--disable-component-extensions-with-background-pages',
-    '--disable-default-apps',
-    '--disable-features=TranslateUI,BlinkGenPropertyTrees',
-    '--disable-hang-monitor',
-    '--disable-ipc-flooding-protection',
-    '--disable-popup-blocking',
-    '--disable-prompt-on-repost',
-    '--disable-renderer-backgrounding',
-    '--disable-sync',
-    '--force-color-profile=srgb',
-    '--metrics-recording-only',
-    '--no-first-run',
-    '--safebrowsing-disable-auto-update',
-    '--enable-automation',
-    '--password-store=basic',
-    '--use-mock-keychain',
-    '--disable-component-update',
-    '--disable-domain-reliability',
-    '--disable-print-preview',
-    '--disable-site-isolation-trials',
-    '--disable-speech-api',
-    '--disk-cache-size=33554432',
-    '--enable-features=SharedArrayBuffer',
-    '--hide-scrollbars',
-    '--ignore-gpu-blocklist',
-    '--mute-audio',
-    '--no-default-browser-check',
-    '--no-pings',
-    '--window-size=1920,1080',
-]
-
-
-def install_dependencies():
-    subprocess.check_call(["playwright", "install"])
-    
-
+ 
 def calculate_crime_score(county: str, city: str, report_id: str):
 
     # Example query to fetch data from a table
@@ -359,10 +302,6 @@ def scrape_address_data(address,report_id):
 
     return metrics
 
-
-
-
-
 def fetch_city_census_data(city_name, report_id):
     table_info = [
         {"Table ID":"B25001","Title":"Housing Units","Description":"This table provides the total number of housing units in the area."},
@@ -477,13 +416,10 @@ def handler(event, context):
         long = listing['longitude']
         address = f'{street_line},{city},{state} {zipcode}'
 
-        # install_dependencies()
-
         # CRIME SCORE
         crime_score, data_to_process = calculate_crime_score(county, city, report_id)
         print(f"Crime score: {crime_score}")
         print(f"Data to process: {data_to_process}")
-
 
 
         trends = scrape_address_data(address,report_id)
@@ -499,21 +435,11 @@ def handler(event, context):
         school_score = scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
         print(f"School score: {school_score}")
 
-
-        
-
-
         census_data = fetch_city_census_data(city,report_id)
         if census_data:
             print(f"Successfully uploaded census data for {city}. Here is the data:{census_data}")
         else:
             print(f"Failed to upload census data for {city}")
-
-        
-        
-        # Example of using Supabase client
-        data = supabase.table('your_table').select('*').execute()
-        print(f"Supabase data: {data}")
 
     return {
         'statusCode': 200,
