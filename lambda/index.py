@@ -18,7 +18,14 @@ args=['--no-sandbox', '--disable-setuid-sandbox','--disable-gpu','--single-proce
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
- 
+
+args=['--no-sandbox', '--disable-setuid-sandbox','--single-process','--disable-gpu']
+
+
+def install_dependencies():
+    subprocess.check_call(["playwright", "install"])
+    
+
 def calculate_crime_score(county: str, city: str, report_id: str):
 
     # Example query to fetch data from a table
@@ -302,6 +309,74 @@ def scrape_address_data(address,report_id):
 
     return metrics
 
+def get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_days=300, type = 1):
+    """
+    Get insights on the best rent for a particular property based on the rent to square footage ratio.
+    
+    Args:
+        address (str): The address of the property (city, state, zip).
+        listing_type (str): The type of listings to search (for_sale, for_rent, pending).
+        past_days (int): How many past days to include in the search.
+    
+    Returns:
+        dict: Dictionary with property details and rent per square foot.
+    """
+    # Fetch properties based on the address
+    properties = scrape_property(
+        location=address,
+        radius=10,
+        listing_type=listing_type,
+        past_days=past_days,
+    )
+    
+    if properties.empty:
+        return {"message": "No properties found for the given address."}
+
+    # Filter out properties with missing 'list_price' or 'sqft'
+    filtered_properties = properties[(properties['list_price'].notna()) & (properties['sqft'].notna()) & (properties['lot_sqft'].notna())]
+    print(len(filtered_properties))
+    # Initialize a dictionary to store insights
+    properties_rent = filtered_properties['list_price'].mean()
+    properties_sqft_rent = filtered_properties['list_price']/filtered_properties['sqft']
+    properties_sqft_rent_lot = filtered_properties['lot_sqft']/filtered_properties['sqft']
+    if type == 1: 
+        estimated_rent = sqft*properties_sqft_rent.mean()
+    else: 
+        estimated_rent = sqft*properties_sqft_rent_lot.mean()
+    
+    fifty_pct_rule = estimated_rent*0.5
+    rent_cash_flow = {
+        'estimated_rent':estimated_rent,
+        'fifty_pct_rule': fifty_pct_rule,
+        'rent_per_sqft':properties_sqft_rent.mean(),
+        'rent_per_lot_sqft': properties_sqft_rent_lot.mean(),
+        'basis_number':len(filtered_properties)
+
+        # mortgage_costs should be in here and appreciation
+    }
+
+
+    supabase.table('reports').update({
+        'rent_cash_flow': json.dumps(rent_cash_flow)
+    }).eq('id', report_id).execute()
+
+    print("Rent cash flow successfully upload")
+    return rent_cash_flow
+
+def get_sales_volume(address):
+    listing_type = "sold"
+    sales_volume_six_months = []
+    for i in range(1,6):
+        properties = scrape_property(
+            location=address,
+            radius=10,
+            listing_type=listing_type,
+            past_days=30*i,
+        )
+        sales_volume_six_months.append(len(properties))
+    return sales_volume_six_months
+
+
 def fetch_city_census_data(city_name, report_id):
     table_info = [
         {"Table ID":"B25001","Title":"Housing Units","Description":"This table provides the total number of housing units in the area."},
@@ -414,6 +489,8 @@ def handler(event, context):
         zipcode = listing['zip_code']
         lat = listing['latitude']
         long = listing['longitude']
+        sqft = listing['sqft']
+        lot_sqft = listing['lot_sqft']
         address = f'{street_line},{city},{state} {zipcode}'
 
         # CRIME SCORE
@@ -440,6 +517,21 @@ def handler(event, context):
             print(f"Successfully uploaded census data for {city}. Here is the data:{census_data}")
         else:
             print(f"Failed to upload census data for {city}")
+
+        if sqft == -1:
+           rent_cash_flow = get_rent_insights(address, lot_sqft, report_id ,listing_type="for_rent", past_days=300, type = 2)
+        else:
+            rent_cash_flow = get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_days=300, type = 1)
+        if rent_cash_flow:
+            print(f"Successfully uploaded rent cash flow data for {city}. Here is the data:{rent_cash_flow}")
+        else:
+            print(f"Failed to upload rent cash flow data for {city}")
+
+
+        
+        
+        
+       
 
     return {
         'statusCode': 200,
