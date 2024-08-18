@@ -11,6 +11,11 @@ from pandas.tseries.offsets import DateOffset
 import datetime
 import requests
 
+
+
+args=['--no-sandbox', '--disable-setuid-sandbox','--disable-gpu','--single-process']
+
+
 # THESE NEED TO BE THESE VERSIONS
 # realtime=1.0.6
 # supabase=2.6.0
@@ -113,42 +118,50 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
     url = f"https://www.schooldigger.com/go/CA/search.aspx?searchtype=11&address={street_line.replace(' ', '+')}&city={city.replace(' ', '+')}&state={state}&zip={zipcode}&lat={lat}&long={long}"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)  # Set headless=True for headless mode
-        page = browser.new_page()
-        print(f"Navigating to URL: {url}")  # Debugging statement
-        page.goto(url, timeout=120000)  # Increase timeout to 60 seconds
-        page.wait_for_load_state("domcontentloaded")  # Wait for DOM content to load
-        # Alternatively, wait for a specific element
-        # page.wait_for_selector("selector_of_an_element_on_the_page")
-        print("Page loaded.")  # Debugging statement
+        try:
+            print("Launching browser...")
+            browser = p.chromium.launch(headless=True, args=args, timeout=120000)  # Increase timeout to 60 seconds
+            print("Browser launched successfully.")
+            
+            page = browser.new_page()
+            print(f"Navigating to URL: {url}")  # Debugging statement
+            page.goto(url, timeout=120000)  # Increase timeout to 120 seconds
+            page.wait_for_load_state("domcontentloaded")  # Wait for DOM content to load
+            print("Page loaded.")  # Debugging statement
 
-        # Wait for the table tab to be clickable and click it
-        page.wait_for_selector("xpath=/html/body/form/div[5]/div[5]/ul/li[4]/a")
-        page.click("xpath=/html/body/form/div[5]/div[5]/ul/li[4]")
-        print("Clicked on the table tab.")  # Debugging statement
+            # Wait for the table tab to be clickable and click it
+            page.wait_for_selector("xpath=/html/body/form/div[5]/div[5]/ul/li[4]/a")
+            page.click("xpath=/html/body/form/div[5]/div[5]/ul/li[4]")
+            print("Clicked on the table tab.")  # Debugging statement
 
-        # Wait for the all button to be clickable and click it
-        page.wait_for_selector("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]")
-        page.click("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]")
-        print("Clicked on the 'All' button.")  # Debugging statement
-        print("Waiting for the page to update...")  # Debugging statement
-        page.wait_for_timeout(2000)
+            # Wait for the all button to be clickable and click it
+            page.wait_for_selector("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]")
+            page.click("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]")
+            print("Clicked on the 'All' button.")  # Debugging statement
+            print("Waiting for the page to update...")  # Debugging statement
+            page.wait_for_timeout(2000)
 
-        # Scrape the table data
-        print("Scraping table data...")  # Debugging statement
-        table = page.query_selector("table.table.table-hover.table-condensed.table-striped.table-bordered.gSurvey.dataTable.no-footer")
-        rows = page.query_selector_all('//*[@id="tabSchooList"]/tbody/tr')  # Get all rows from the specified XPath
-        
-        school_data = []
-        headers = [header.inner_text() for header in page.query_selector_all('//*[@id="tabSchooList_wrapper"]/div/div[2]/div/div[1]/div/table/thead/tr[2]/th')]  # Extract headers from specified XPath
-        for row in rows:  # Iterate through all rows
-            cols = row.query_selector_all("td")  # Get all columns in the current row
-            row_data = {headers[i]: col.inner_text() for i, col in enumerate(cols)}  # Map headers to data
-            school_data.append(row_data)  # Append the row data as a dictionary
-        print("Data scraped successfully.")  # Debugging statement
+            # Scrape the table data
+            print("Scraping table data...")  # Debugging statement
+            table = page.query_selector("table.table.table-hover.table-condensed.table-striped.table-bordered.gSurvey.dataTable.no-footer")
+            rows = page.query_selector_all('//*[@id="tabSchooList"]/tbody/tr')  # Get all rows from the specified XPath
 
+            school_data = []
+            headers = [header.inner_text() for header in page.query_selector_all('//*[@id="tabSchooList_wrapper"]/div/div[2]/div/div[1]/div/table/thead/tr[2]/th')]  # Extract headers from specified XPath
+            for row in rows:  # Iterate through all rows
+                cols = row.query_selector_all("td")  # Get all columns in the current row
+                row_data = {headers[i]: col.inner_text() for i, col in enumerate(cols)}  # Map headers to data
+                school_data.append(row_data)  # Append the row data as a dictionary
+            print("Data scraped successfully.")  # Debugging statement
 
-        return calculate_school_data(school_data, report_id)
+            browser.close()
+
+            return calculate_school_data(school_data, report_id)
+        except Exception as e:
+            print(f"Error in scrape_schooldigger: {str(e)}")
+            if 'browser' in locals():
+                browser.close()
+            raise
 
 def calculate_school_data(school_data, report_id):
 
@@ -351,7 +364,7 @@ def fetch_city_census_data(city_name, report_id):
     census_data = fetch_census_data(table_ids, geo_id)
 
     # Dictionary to hold the structured data
-    census_data = {}
+    structured_data = {}
 
     # Iterate over the tables and data
     for table_id, table_content in census_data['data'][geo_id].items():
@@ -362,8 +375,8 @@ def fetch_city_census_data(city_name, report_id):
         table_description = table_info.get('Description', 'No description available')
 
         # Initialize the structure for this table if not already initialized
-        if table_id not in census_data:
-            census_data[table_id] = {
+        if table_id not in structured_data:
+            structured_data[table_id] = {
                 "Table Title": table_title,
                 "Table Description": table_description,
                 "Columns": []
@@ -373,7 +386,7 @@ def fetch_city_census_data(city_name, report_id):
         for column_id, estimate in table_content['estimate'].items():
             description = table_columns[column_id]['name']
             error = table_content['error'].get(column_id, None)
-            census_data[table_id]["Columns"].append({
+            structured_data[table_id]["Columns"].append({
                 "Column ID": column_id,
                 "Description": description,
                 "Estimate": estimate,
@@ -385,10 +398,10 @@ def fetch_city_census_data(city_name, report_id):
     print(f"Appended census data: {geo_entry['name']}")
 
     supabase.table('reports').update({
-        'census_data': json.dumps(census_data)
+        'census_data': json.dumps(structured_data)
     }).eq('id', report_id).execute()
     # Return the structured data
-    return census_data
+    return structured_data
 
 def handler(event, context):
     for record in event['Records']:
