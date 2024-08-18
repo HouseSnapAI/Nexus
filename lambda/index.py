@@ -8,7 +8,7 @@ from homeharvest import scrape_property
 from datetime import datetime
 import pandas as pd
 from pandas.tseries.offsets import DateOffset
-import datetime
+from datetime import datetime
 import requests
 
 
@@ -263,7 +263,7 @@ def calculate_school_data(school_data, report_id):
 
     return average_top_3_score
 
-def scrape_address_data(address, report_id):
+def scrape_address_data(address,report_id):
     past_days = 5 * 365  # 5 years worth of days
     radius = 0.5  # 0.5 mile radius
 
@@ -282,7 +282,7 @@ def scrape_address_data(address, report_id):
 
     
 
-    current_year = datetime.datetime.now().year
+    current_year = datetime.now().year
 
 
     metrics = {
@@ -326,12 +326,12 @@ def scrape_address_data(address, report_id):
         'sold_past_month': sold_past_month,
     })
 
-    # Calculate median and average house prices for each of the past 5 years
+# Calculate median and average house prices for each of the past 5 years
     for i in range(5):
-        start_date = current_date - DateOffset(years=i+1)
+        start_date = current_date - DateOffset(years=i + 1)
         end_date = current_date - DateOffset(years=i)
         yearly_properties = all_properties[(all_properties['last_sold_date'] >= start_date) & (all_properties['last_sold_date'] < end_date)]
-        
+
         metrics.update({
             f'average_price_{end_date.year}': yearly_properties['list_price'].mean(),
             f'median_price_{end_date.year}': yearly_properties['list_price'].median(),
@@ -341,16 +341,27 @@ def scrape_address_data(address, report_id):
     sold_properties = all_properties.dropna(subset=['last_sold_date']).sort_values(by='last_sold_date')
     recent_sold_properties = sold_properties.tail(10)
 
-    # Print details of the 10 most recently sold properties
-    print("Details of the 10 most recently sold properties:")
-    for index, property in recent_sold_properties.iterrows():
-        print(property.to_dict())
+    recent_sold_properties_list = []
+    for _, property in recent_sold_properties.iterrows():
+        property_dict = property.to_dict()
+        # Convert Timestamp objects to string in ISO 8601 format
+        if isinstance(property_dict.get('last_sold_date'), pd.Timestamp):
+            property_dict['last_sold_date'] = property_dict['last_sold_date'].isoformat()
+        recent_sold_properties_list.append(property_dict)
 
+    # Add recent sold properties to the metrics dictionary
+    metrics['recent_sold_properties'] = recent_sold_properties_list
+
+    # Convert metrics to JSON string and update in Supabase
     supabase.table('reports').update({
         'market_trends': json.dumps(metrics)
     }).eq('id', report_id).execute()
 
     return metrics
+
+
+
+
 
 def fetch_city_census_data(city_name, report_id):
     table_info = [
@@ -473,16 +484,7 @@ def handler(event, context):
         print(f"Crime score: {crime_score}")
         print(f"Data to process: {data_to_process}")
 
-        # SCHOOL SCORE
-        school_score = scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
-        print(f"School score: {school_score}")
 
-
-        census_data = fetch_city_census_data(city,report_id)
-        if census_data:
-            print(f"Successfully uploaded census data for {city}. Here is the data:{census_data}")
-        else:
-            print(f"Failed to upload census data for {city}")
 
         trends = scrape_address_data(address,report_id)
 
@@ -492,6 +494,22 @@ def handler(event, context):
             print(f"Failed to upload trend data for {city}")
         # Process the body payload
         print(f"Processing message: {body}")
+
+        # SCHOOL SCORE
+        school_score = scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
+        print(f"School score: {school_score}")
+
+
+        
+
+
+        census_data = fetch_city_census_data(city,report_id)
+        if census_data:
+            print(f"Successfully uploaded census data for {city}. Here is the data:{census_data}")
+        else:
+            print(f"Failed to upload census data for {city}")
+
+        
         
         # Example of using Supabase client
         data = supabase.table('your_table').select('*').execute()
