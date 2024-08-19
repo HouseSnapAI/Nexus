@@ -477,7 +477,7 @@ def fetch_city_census_data(city_name, report_id):
 def handler(event, context):
     for record in event['Records']:
         print("RUNNIN CODE!!")
-        body = record.get('body', '')
+        body = json.loads(record.get('body', '')) 
         print(body)
         report_id = body['report_id']
         listing = body['listing']
