@@ -8,7 +8,7 @@ dotenv.config();
 
 // Create an SQS Queue
 const queue = new aws.sqs.Queue("NexusQueue", {
-    visibilityTimeoutSeconds: 30,
+    visibilityTimeoutSeconds: 300, // Set visibility timeout to match Lambda function timeout
 });
 
 // Create an IAM Role for the Lambda function
@@ -76,11 +76,38 @@ const ecrPolicyAttachment = new aws.iam.RolePolicyAttachment("ecrPolicyAttachmen
     policyArn: ecrAccessPolicy.arn,
 });
 
+// Create a policy for SQS access
+const sqsAccessPolicy = new aws.iam.Policy("sqsAccessPolicy", {
+    description: "Policy for Lambda to access SQS",
+    policy: pulumi.output(queue.arn).apply(arn => JSON.stringify({
+        Version: "2012-10-17",
+        Statement: [
+            {
+                Effect: "Allow",
+                Action: [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage",
+                    "sqs:GetQueueAttributes"
+                ],
+                Resource: arn
+            }
+        ]
+    }))
+});
+
+// Attach the SQS access policy to the Lambda execution role
+const sqsPolicyAttachment = new aws.iam.RolePolicyAttachment("sqsPolicyAttachment", {
+    role: role.name,
+    policyArn: sqsAccessPolicy.arn,
+});
+
 // Create the Lambda function
 const lambda = new aws.lambda.Function("NexusLambda", {
     packageType: "Image",
     imageUri: "767397951738.dkr.ecr.us-west-1.amazonaws.com/nexus-engine:latest",
     role: role.arn,
+    timeout: 300, // Set timeout to 5 minutes
+    memorySize: 2048, 
     environment: {
         variables: {
             SUPABASE_URL: process.env.SUPABASE_URL!,
@@ -88,12 +115,12 @@ const lambda = new aws.lambda.Function("NexusLambda", {
         },
     },
 }, {
-    dependsOn: [ecrPolicyAttachment], // Ensure the policy is attached before creating the Lambda
+    dependsOn: [ecrPolicyAttachment, sqsPolicyAttachment], // Ensure the policies are attached before creating the Lambda
 });
 
 // Create an Event Source Mapping to trigger the Lambda function from the SQS Queue
 const eventSourceMapping = new aws.lambda.EventSourceMapping("eventSourceMapping", {
     eventSourceArn: queue.arn,
     functionName: lambda.name,
-    batchSize: 10,
+    batchSize: 1,
 });
