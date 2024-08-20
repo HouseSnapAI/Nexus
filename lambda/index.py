@@ -474,13 +474,33 @@ def fetch_city_census_data(city_name, report_id):
     # Return the structured data
     return structured_data
 
+def update_status(report_id, status, client_id):
+    supabase.table('reports').update({
+        'status': status
+        }).eq('id', report_id).execute()
+    
+    url = "https://housesnapai.vercel.app/api/report/event"
+    payload = {
+        "clientId": client_id,
+        "message": status
+    }
+    headers = {
+        "Content-Type": "application/json"
+    }
+    response = requests.post(url, json=payload, headers=headers)
+    return response.status_code, response.text
+    
+    
 def handler(event, context):
     for record in event['Records']:
         print("RUNNIN CODE!!")
         body = json.loads(record.get('body', '')) 
         print(body)
         report_id = body['report_id']
+        client_id = body['client_id']
         listing = body['listing']
+
+        update_status(report_id, "started", client_id)
 
         county = listing['county']
         city = listing['city']
@@ -498,6 +518,8 @@ def handler(event, context):
         print(f"Crime score: {crime_score}")
         print(f"Data to process: {data_to_process}")
 
+        update_status(report_id, "crime_done", client_id)
+
 
         trends = scrape_address_data(address,report_id)
 
@@ -508,15 +530,22 @@ def handler(event, context):
         # Process the body payload
         print(f"Processing message: {body}")
 
+        update_status(report_id, "trends_done", client_id)
+
         # SCHOOL SCORE
         school_score = scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
         print(f"School score: {school_score}")
+
+        update_status(report_id, "school_done", client_id)
+
 
         census_data = fetch_city_census_data(city,report_id)
         if census_data:
             print(f"Successfully uploaded census data for {city}. Here is the data:{census_data}")
         else:
             print(f"Failed to upload census data for {city}")
+
+        update_status(report_id, "census_done", client_id)
 
         if sqft == -1:
            rent_cash_flow = get_rent_insights(address, lot_sqft, report_id ,listing_type="for_rent", past_days=300, type = 2)
@@ -527,11 +556,9 @@ def handler(event, context):
         else:
             print(f"Failed to upload rent cash flow data for {city}")
 
+        update_status(report_id, "cash_flow_done", client_id)
 
-        
-        
-        
-       
+        update_status(report_id, "complete", client_id)
 
     return {
         'statusCode': 200,
