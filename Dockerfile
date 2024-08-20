@@ -3,14 +3,14 @@ ARG FUNCTION_DIR="/lambda"
 
 FROM python:3.11-bookworm
 
+# Include global arg in this stage of the build
+# removthis is shi dont work
+ARG FUNCTION_DIR 
+
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PLAYWRIGHT_BROWSERS_PATH=${FUNCTION_DIR}/ms-playwright
-
-# Install aws-lambda-cpp build dependencies
-# Set environment variables
-
 
 # Install aws-lambda-cpp build dependencies
 RUN apt-get update && \
@@ -39,12 +39,6 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Include global arg in this stage of the build
-ARG FUNCTION_DIR
-
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PLAYWRIGHT_BROWSERS_PATH=${FUNCTION_DIR}/ms-playwright
 # Create function directory
 RUN mkdir -p ${FUNCTION_DIR}
 
@@ -62,7 +56,6 @@ RUN cd ${FUNCTION_DIR} && \
     pip install playwright==1.46.0 && \
     PLAYWRIGHT_BROWSERS_PATH=${FUNCTION_DIR}/ms-playwright python -m playwright install --with-deps chromium && \
     cd -
-
 
 # Set working directory to function root directory
 WORKDIR ${FUNCTION_DIR}
