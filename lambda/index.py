@@ -302,7 +302,7 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
         
         
         try:
-            scrape_home_details(f'{street_line},{city},{state}',report_id)
+            scrape_home_details(page,f'{street_line},{city},{state}',report_id)
         except Exception as e:
             print(f"Error in scrape_home_details: {str(e)}")
             update_flags(report_id, "Error in scrape_home_details.")
@@ -705,7 +705,9 @@ def update_flags(report_id, flag):
 def handler(event, context):
     for record in event['Records']:
         print("RUNNING CODE!!")
-        body = json.loads(record.get('body', ''))
+        # body = json.loads(record.get('body', ''))
+        body = record.get('body', '')
+        
         print(body)
             
             
