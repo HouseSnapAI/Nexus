@@ -43,8 +43,7 @@ def calculate_crime_score(county: str, city: str, report_id: str):
         response = supabase.table('crime_data_ca').select(
             'all_violent_crime_trend, agency_name, crime_location, victim_age, victim_ethnicity, victim_race, victim_age, id'
         ).or_(
-            f"agency_name.ilike.%{city}%,"
-            f"agency_name.ilike.%{county}%,"
+            f"agency_name.ilike.%{city}%,agency_name.ilike.%{county}%"
         ).execute()
     except Exception as e:
         print(f"Error fetching crime_score data from Supabase: {e}")
