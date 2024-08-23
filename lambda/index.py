@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 from supabase import create_client, Client
 from playwright.sync_api import sync_playwright
 from homeharvest import scrape_property
@@ -10,6 +11,7 @@ import pandas as pd
 from pandas.tseries.offsets import DateOffset
 from datetime import datetime
 import requests
+
 
 args=['--no-sandbox', '--disable-setuid-sandbox','--disable-gpu','--single-process']
 
@@ -22,104 +24,236 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 args=['--no-sandbox', '--disable-setuid-sandbox','--single-process','--disable-gpu']
 
 
+
 def install_dependencies():
     subprocess.check_call(["playwright", "install"])
     
 
 def calculate_crime_score(county: str, city: str, report_id: str):
-
-    # Example query to fetch data from a table
-    response = supabase.table('crime_data_ca').select(
-        'all_violent_crime_trend, agency_name, crime_location, victim_age, victim_ethnicity, victim_race, victim_age, id'
-    ).or_(
-        f"agency_name.ilike.%{county}_county_sheriff%,"
-        f"agency_name.ilike.%{city}_police%,"
-        f"agency_name.ilike.%{county}_police%,"
-        f"agency_name.ilike.%{city}_sheriff%"
-    ).execute()
-
-    # Check if there's any city-level data
-    city_data = [item for item in response.data if city.lower() in item['agency_name'].lower()]
-    county_data = [item for item in response.data if county.lower() in item['agency_name'].lower() and city.lower() not in item['agency_name'].lower()]
-
-    # Combine city_data and county_data
-    combined_data = city_data + county_data
-
-    crime_data_ids = []
-    # Append crime_data_ids from combined_data
-    for item in combined_data:
-        crime_data_ids.append(item['id'])
-    
-    # Process city data if available, otherwise process county data
-    if city_data:
-        data_to_process = city_data
-        print(f"Processing city-level data for {city}")
-    else:
-        data_to_process = county_data
-        print(f"Processing county-level data for {county}")
-
-    # Calculate the scores
-    scores = []
-    for res in range(len(data_to_process)):
-        print(f"Processing item {res + 1} of {len(data_to_process)}")
-        
-        # Print the response data for the current item
-        print(data_to_process[res])
-        
-        averages = []
-        for i in range(2012, 2023):
-            if i == 2021:
-                continue
-            # Calculate the result for the current year
-            try:
-                result = data_to_process[res]['all_violent_crime_trend'][1][f'{i}'] / data_to_process[res]['all_violent_crime_trend'][0][f'{i}']
-                averages.append(result)
-                print(f"Year: {i}, Result: {result}")
-            except KeyError:
-                print(f"Year: {i} data is missing or incomplete.")
-                continue
-        
-        # Calculate the average percentage
-        if averages:
-            avg_pct = sum(averages) / len(averages)
-            score_10 = avg_pct * 10
-        else:
-            score_10 = 0  # Handle cases with no valid data
-
-        # Store the score
-        scores.append(score_10)
-        print(f"Score for item {res + 1}: {score_10}")
-
-    # If there are multiple scores (e.g., city has both police and sheriff's departments), calculate the average score
-    if len(scores) > 1:
-        crime_score = sum(scores) / len(scores)
-    else:
-        crime_score = scores[0] if scores else 0
-
-    # Update the reports table with crime_data_ids and crime_score
-    update_data = {
-        'crime_data_ids': crime_data_ids,
-        'crime_score': crime_score
-    }
+    try:
+        county = county.replace(" ", "_").lower()
+        city = city.replace(" ", "_").lower()
+    except Exception as e:
+        print(f"Error processing county or city name: {e}")
+        return {"message": "Error processing county or city name."}
 
     try:
+        # Example query to fetch data from a table
+        response = supabase.table('crime_data_ca').select(
+            'all_violent_crime_trend, agency_name, crime_location, victim_age, victim_ethnicity, victim_race, victim_age, id'
+        ).or_(
+            f"agency_name.ilike.%{city}%,"
+            f"agency_name.ilike.%{county}%,"
+        ).execute()
+    except Exception as e:
+        print(f"Error fetching crime_score data from Supabase: {e}")
+        return {"message": "Error fetching data from database."}
+
+    try:
+        # Check if there's any city-level data
+        city_data = [item for item in response.data if city.lower() in item['agency_name'].lower()]
+        county_data = [item for item in response.data if county.lower() in item['agency_name'].lower() and city.lower() not in item['agency_name'].lower()]
+
+        # Combine city_data and county_data
+        combined_data = city_data + county_data
+
+        crime_data_ids = []
+        # Append crime_data_ids from combined_data
+        for item in combined_data:
+            crime_data_ids.append(item['id'])
+    except Exception as e:
+        print(f"Error processing fetched data: {e}")
+        return {"message": "Error processing fetched data."}
+
+    # Determine which data to process
+    try:
+        if city_data:
+            data_to_process = city_data
+            print(f"Processing city-level data for {city}")
+        else:
+            data_to_process = county_data
+            print(f"Processing county-level data for {county}")
+    except Exception as e:
+        print(f"Error determining data to process: {e}")
+        return {"message": "Error determining data to process."}
+
+    scores = []
+    try:
+        # Calculate the scores
+        for res in range(len(data_to_process)):
+            print(f"Processing item {res + 1} of {len(data_to_process)}")
+
+            # Print the response data for the current item
+            print(data_to_process[res])
+
+            averages = []
+            for i in range(2012, 2023):
+                if i == 2021:
+                    continue
+                try:
+                    result = data_to_process[res]['all_violent_crime_trend'][1][f'{i}'] / data_to_process[res]['all_violent_crime_trend'][0][f'{i}']
+                    averages.append(result)
+                    print(f"Year: {i}, Result: {result}")
+                except KeyError:
+                    print(f"Year: {i} data is missing or incomplete.")
+                    continue
+
+            # Calculate the average percentage
+            if averages:
+                avg_pct = sum(averages) / len(averages)
+                score_10 = avg_pct * 10
+            else:
+                score_10 = 0  # Handle cases with no valid data
+
+            # Store the score
+            scores.append(score_10)
+            print(f"Score for item {res + 1}: {score_10}")
+    except Exception as e:
+        print(f"Error calculating scores: {e}")
+        return {"message": "Error calculating scores."}
+
+    try:
+        # If there are multiple scores (e.g., city has both police and sheriff's departments), calculate the average score
+        if len(scores) > 1:
+            crime_score = sum(scores) / len(scores)
+        else:
+            crime_score = scores[0] if scores else 0
+    except Exception as e:
+        print(f"Error calculating crime score: {e}")
+        return {"message": "Error calculating crime score."}
+
+    try:
+        # Update the reports table with crime_data_ids and crime_score
+        update_data = {
+            'crime_data_ids': crime_data_ids,
+            'crime_score': crime_score
+        }
+
         response = supabase.table('reports').update(update_data).eq('id', report_id).execute()
         print(f"Updated report {report_id} with crime_data_ids: {crime_data_ids}")
     except Exception as e:
         print(f"Error updating report {report_id}: {str(e)}")
+        return {"message": f"Error updating report {report_id}."}
 
     return crime_score, data_to_process
 
+def scrape_home_details(page, address, report_id):
+    page.goto("https://www.homes.com/")
+    xpath_search_box = "//input[contains(@class, 'multiselect-search')]"
+
+    page.locator(xpath_search_box).click()
+    page.locator(xpath_search_box).type(address, delay=200)
+    page.wait_for_load_state("domcontentloaded")
+    page.locator(xpath_search_box).press("Enter")
+    page.wait_for_load_state("domcontentloaded")
+
+    time.sleep(2)
+
+    home_details = {
+        "price": page.query_selector("#price").inner_text(),
+        "views": page.query_selector(".total-views").inner_text(),
+        "highlights": [
+            highlight.query_selector(".highlight-value").inner_text().strip()
+            for highlight in page.query_selector_all("#highlights-section .highlight")
+        ],
+        "home_details": [
+            {
+                "label": subcategory.query_selector(".amenity-name").inner_text().strip(),
+                "details": [detail.inner_text().strip() for detail in subcategory.query_selector_all(".amenities-detail")]
+            }
+            for subcategory in page.query_selector_all("#amenities-container .subcategory")
+        ],
+        "neighborhood_kpis": [
+            {
+                "title": kpi.query_selector(".neighborhood-kpi-card-title").inner_text(),
+                "text": kpi.query_selector(".neighborhood-kpi-card-text").inner_text()
+            }
+            for kpi in page.query_selector_all(".neighborhood-kpi-card")
+        ],
+        "tax_history": [
+            {
+                "year": row.query_selector(".tax-year").inner_text().strip(),
+                "tax_paid": row.query_selector(".tax-amount").inner_text().strip(),
+                "tax_assessment": row.query_selector(".tax-assessment").inner_text().strip(),
+                "land": row.query_selector(".tax-land").inner_text().strip(),
+                "improvement": row.query_selector(".tax-improvement").inner_text().strip()
+            }
+            for row in page.query_selector_all("#tax-history-container .tax-table .tax-table-body .tax-table-body-row")
+        ],
+        "price_history": [
+            {
+                "date": row.query_selector(".price-year .long-date").inner_text().strip(),
+                "event": row.query_selector(".price-event").inner_text().strip(),
+                "price": row.query_selector(".price-price").inner_text().strip(),
+                "change": row.query_selector(".price-change").inner_text().strip(),
+                "sq_ft_price": row.query_selector(".price-sq-ft").inner_text().strip()
+            }
+            for row in page.query_selector_all("#price-history-container .price-table .table-body-row")
+        ],
+        "deed_history": [
+            {
+                "date": row.query_selector(".deed-date .shorter-date").inner_text().strip(),
+                "type": row.query_selector(".deed-type").inner_text().strip(),
+                "sale_price": row.query_selector(".deed-sale-price").inner_text().strip(),
+                "title_company": row.query_selector(".deed-title-company").inner_text().strip()
+            }
+            for row in page.query_selector_all("#deed-history-container .deed-table .deed-table-body-row")
+        ],
+        "mortgage_history": [
+            {
+                "date": row.query_selector(".mortgage-date .shorter-date").inner_text().strip(),
+                "status": row.query_selector(".mortgage-status").inner_text().strip(),
+                "loan_amount": row.query_selector(".mortgage-amount").inner_text().strip(),
+                "loan_type": row.query_selector(".mortgage-type").inner_text().strip()
+            }
+            for row in page.query_selector_all("#mortgage-history-container .mortgage-table .table-body-row")
+        ],
+        "transportation": [
+            {
+                "type": item.query_selector(".transportation-type").inner_text().strip(),
+                "name": item.query_selector(".transportation-name").inner_text().strip(),
+                "distance": item.query_selector(".transportation-distance").inner_text().strip()
+            }
+            for item in page.query_selector_all("#transportation-container .transportation-item")
+        ],
+        "bike_score": {
+            "tagline": page.query_selector("#score-card-container .bike-score .score-card-tagline").inner_text().strip(),
+            "score": page.query_selector("#score-card-container .bike-score .score-scoretext").inner_text().strip()
+        },
+        "walk_score": {
+            "tagline": page.query_selector("#score-card-container .walk-score .score-card-tagline").inner_text().strip(),
+            "score": page.query_selector("#score-card-container .walk-score .score-scoretext").inner_text().strip()
+        },
+
+    }
+    
+    try:
+        supabase.table('reports').update({
+            'home_details': home_details
+        }).eq('id', report_id).execute()
+    except Exception as e:
+        print(f"Failed to update Supabase: {e}")
+    
+
+
+
 def scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id):
+    ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
     url = f"https://www.schooldigger.com/go/CA/search.aspx?searchtype=11&address={street_line.replace(' ', '+')}&city={city.replace(' ', '+')}&state={state}&zip={zipcode}&lat={lat}&long={long}"
 
     with sync_playwright() as p:
+
+        print("Launching browser...")
+        browser = p.chromium.launch(headless=True, args=args, timeout=120000)  # Increase timeout to 60 seconds
+        print("Browser launched successfully.")
+           
+        page = browser.new_page(user_agent=ua)
+        page.set_extra_http_headers({
+            "sec-ch-ua": '"Chromium";v="125", "Not.A/Brand";v="24"'
+        })
+        
         try:
-            print("Launching browser...")
-            browser = p.chromium.launch(headless=True, args=args, timeout=120000)  # Increase timeout to 60 seconds
-            print("Browser launched successfully.")
             
-            page = browser.new_page()
             print(f"Navigating to URL: {url}")  # Debugging statement
             page.goto(url, timeout=120000)  # Increase timeout to 120 seconds
             page.wait_for_load_state("domcontentloaded")  # Wait for DOM content to load
@@ -150,14 +284,21 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
                 school_data.append(row_data)  # Append the row data as a dictionary
             print("Data scraped successfully.")  # Debugging statement
 
-            browser.close()
+            calculate_school_data(school_data,report_id)
 
-            return calculate_school_data(school_data, report_id)
+           
         except Exception as e:
             print(f"Error in scrape_schooldigger: {str(e)}")
-            if 'browser' in locals():
-                browser.close()
             raise
+        
+        
+        try:
+            scrape_home_details(f'{street_line},{city},{state}',report_id)
+        except Exception as e:
+            print(f"Error in scrape_home_details: {str(e)}")
+            raise
+            
+            
 
 def calculate_school_data(school_data, report_id):
 
@@ -211,101 +352,121 @@ def calculate_school_data(school_data, report_id):
         'top_schools': closest_schools
     }).eq('id', report_id).execute()
 
-    return average_top_3_score
+    
 
-def scrape_address_data(address,report_id):
+
+def scrape_address_data(address, report_id):
     past_days = 5 * 365  # 5 years worth of days
     radius = 0.5  # 0.5 mile radius
 
     all_properties = pd.DataFrame()
 
     # Fetch properties for sale, sold, and pending
-    for listing_type in ['for_sale', 'sold', 'pending']:
-        properties = scrape_property(
-            location=address,
-            listing_type=listing_type,
-            radius=radius,
-            past_days=past_days,
-            extra_property_data=True,
-        )
-        all_properties = pd.concat([all_properties, properties])
-
-    
+    try:
+        for listing_type in ['for_sale', 'sold', 'pending']:
+            properties = scrape_property(
+                location=address,
+                listing_type=listing_type,
+                radius=radius,
+                past_days=past_days,
+                extra_property_data=True,
+            )
+            all_properties = pd.concat([all_properties, properties])
+    except Exception as e:
+        print(f"Failed to scrape properties data: {e}")
 
     current_year = datetime.now().year
+    metrics = {}
 
-
-    metrics = {
-        'average_year_built': current_year-(current_year - all_properties['year_built']).mean(),
-        'median_year_built': current_year-(current_year - all_properties['year_built']).median(),
-        'range_year_built': all_properties['year_built'].max() - all_properties['year_built'].min(),
-        'average_lot_size': all_properties['lot_sqft'].mean(),
-        'median_lot_size': all_properties['lot_sqft'].median(),
-        'range_lot_size': all_properties['lot_sqft'].max() - all_properties['lot_sqft'].min(),
-        'average_price_per_sqft': all_properties['price_per_sqft'].mean(),
-        'median_price_per_sqft': all_properties['price_per_sqft'].median(),
-        'range_price_per_sqft': all_properties['price_per_sqft'].max() - all_properties['price_per_sqft'].min(),
-        'average_estimated_price': all_properties['list_price'].mean(),
-        'median_estimated_price': all_properties['list_price'].median(),
-        'range_estimated_price': all_properties['list_price'].max() - all_properties['list_price'].min(),
-        'average_house_size': all_properties['sqft'].mean(),
-        'median_house_size': all_properties['sqft'].median(),
-        'range_house_size': all_properties['sqft'].max() - all_properties['sqft'].min(),
-        'average_days_on_market': all_properties['days_on_mls'].mean(),
-        'median_days_on_market': all_properties['days_on_mls'].median(),
-        'range_days_on_market': all_properties['days_on_mls'].max() - all_properties['days_on_mls'].min(),
-    }
+    # Calculate property metrics
+    try:
+        metrics = {
+            'average_year_built': current_year - (current_year - all_properties['year_built']).mean(),
+            'median_year_built': current_year - (current_year - all_properties['year_built']).median(),
+            'range_year_built': all_properties['year_built'].max() - all_properties['year_built'].min(),
+            'average_lot_size': all_properties['lot_sqft'].mean(),
+            'median_lot_size': all_properties['lot_sqft'].median(),
+            'range_lot_size': all_properties['lot_sqft'].max() - all_properties['lot_sqft'].min(),
+            'average_price_per_sqft': all_properties['price_per_sqft'].mean(),
+            'median_price_per_sqft': all_properties['price_per_sqft'].median(),
+            'range_price_per_sqft': all_properties['price_per_sqft'].max() - all_properties['price_per_sqft'].min(),
+            'average_estimated_price': all_properties['list_price'].mean(),
+            'median_estimated_price': all_properties['list_price'].median(),
+            'range_estimated_price': all_properties['list_price'].max() - all_properties['list_price'].min(),
+            'average_house_size': all_properties['sqft'].mean(),
+            'median_house_size': all_properties['sqft'].median(),
+            'range_house_size': all_properties['sqft'].max() - all_properties['sqft'].min(),
+            'average_days_on_market': all_properties['days_on_mls'].mean(),
+            'median_days_on_market': all_properties['days_on_mls'].median(),
+            'range_days_on_market': all_properties['days_on_mls'].max() - all_properties['days_on_mls'].min(),
+        }
+    except Exception as e:
+        print(f"Failed to calculate property metrics: {e}")
 
     # Calculate sales volume
-    current_date = datetime.now()
-    all_properties['last_sold_date'] = pd.to_datetime(all_properties['last_sold_date'], errors='coerce')
+    try:
+        current_date = datetime.now()
+        all_properties['last_sold_date'] = pd.to_datetime(all_properties['last_sold_date'], errors='coerce')
 
-    past_5_years = current_date - DateOffset(years=5)
-    past_year = current_date - DateOffset(years=1)
-    past_month = current_date - DateOffset(months=1)
+        past_5_years = current_date - DateOffset(years=5)
+        past_year = current_date - DateOffset(years=1)
+        past_month = current_date - DateOffset(months=1)
 
-    total_properties = len(all_properties)
-    sold_past_5_years = len(all_properties[(all_properties['last_sold_date'] >= past_5_years)])
-    sold_past_year = len(all_properties[(all_properties['last_sold_date'] >= past_year)])
-    sold_past_month = len(all_properties[(all_properties['last_sold_date'] >= past_month)])
-
-    metrics.update({
-        'total_properties': total_properties,
-        'sold_past_5_years': sold_past_5_years,
-        'sold_past_year': sold_past_year,
-        'sold_past_month': sold_past_month,
-    })
-
-# Calculate median and average house prices for each of the past 5 years
-    for i in range(5):
-        start_date = current_date - DateOffset(years=i + 1)
-        end_date = current_date - DateOffset(years=i)
-        yearly_properties = all_properties[(all_properties['last_sold_date'] >= start_date) & (all_properties['last_sold_date'] < end_date)]
+        total_properties = len(all_properties)
+        sold_past_5_years = len(all_properties[(all_properties['last_sold_date'] >= past_5_years)])
+        sold_past_year = len(all_properties[(all_properties['last_sold_date'] >= past_year)])
+        sold_past_month = len(all_properties[(all_properties['last_sold_date'] >= past_month)])
 
         metrics.update({
-            f'average_price_{end_date.year}': yearly_properties['list_price'].mean(),
-            f'median_price_{end_date.year}': yearly_properties['list_price'].median(),
+            'total_properties': total_properties,
+            'sold_past_5_years': sold_past_5_years,
+            'sold_past_year': sold_past_year,
+            'sold_past_month': sold_past_month,
         })
+    except Exception as e:
+        print(f"Failed to calculate sales volume: {e}")
 
-    # Sort properties by last_sold_date and get the 10 most recently sold
-    sold_properties = all_properties.dropna(subset=['last_sold_date']).sort_values(by='last_sold_date')
-    recent_sold_properties = sold_properties.tail(10)
+    # Calculate median and average house prices for each of the past 5 years
+    try:
+        for i in range(5):
+            start_date = current_date - DateOffset(years=i + 1)
+            end_date = current_date - DateOffset(years=i)
+            yearly_properties = all_properties[
+                (all_properties['last_sold_date'] >= start_date) & (all_properties['last_sold_date'] < end_date)
+            ]
 
-    recent_sold_properties_list = []
-    for _, property in recent_sold_properties.iterrows():
-        property_dict = property.to_dict()
-        # Convert Timestamp objects to string in ISO 8601 format
-        if isinstance(property_dict.get('last_sold_date'), pd.Timestamp):
-            property_dict['last_sold_date'] = property_dict['last_sold_date'].isoformat()
-        recent_sold_properties_list.append(property_dict)
+            metrics.update({
+                f'average_price_{end_date.year}': yearly_properties['list_price'].mean(),
+                f'median_price_{end_date.year}': yearly_properties['list_price'].median(),
+            })
+    except Exception as e:
+        print(f"Failed to calculate yearly house prices: {e}")
 
-    # Add recent sold properties to the metrics dictionary
-    metrics['recent_sold_properties'] = recent_sold_properties_list
+    # Get recent sold properties
+    try:
+        sold_properties = all_properties.dropna(subset=['last_sold_date']).sort_values(by='last_sold_date')
+        recent_sold_properties = sold_properties.tail(10)
 
-    # Convert metrics to JSON string and update in Supabase
-    supabase.table('reports').update({
-        'market_trends': json.dumps(metrics)
-    }).eq('id', report_id).execute()
+        recent_sold_properties_list = []
+        for _, property in recent_sold_properties.iterrows():
+            property_dict = property.to_dict()
+            # Convert Timestamp objects to string in ISO 8601 format
+            if isinstance(property_dict.get('last_sold_date'), pd.Timestamp):
+                property_dict['last_sold_date'] = property_dict['last_sold_date'].isoformat()
+            recent_sold_properties_list.append(property_dict)
+
+        # Add recent sold properties to the metrics dictionary
+        metrics['recent_sold_properties'] = recent_sold_properties_list
+    except Exception as e:
+        print(f"Failed to process recent sold properties: {e}")
+
+    # Update Supabase with metrics
+    try:
+        supabase.table('reports').update({
+            'market_trends': metrics
+        }).eq('id', report_id).execute()
+    except Exception as e:
+        print(f"Failed to update Supabase: {e}")
 
     return metrics
 
@@ -321,60 +482,72 @@ def get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_da
     Returns:
         dict: Dictionary with property details and rent per square foot.
     """
-    # Fetch properties based on the address
-    properties = scrape_property(
-        location=address,
-        radius=10,
-        listing_type=listing_type,
-        past_days=past_days,
-    )
-    
-    if properties.empty:
-        return {"message": "No properties found for the given address."}
-
-    # Filter out properties with missing 'list_price' or 'sqft'
-    filtered_properties = properties[(properties['list_price'].notna()) & (properties['sqft'].notna()) & (properties['lot_sqft'].notna())]
-    print(len(filtered_properties))
-    # Initialize a dictionary to store insights
-    properties_rent = filtered_properties['list_price'].mean()
-    properties_sqft_rent = filtered_properties['list_price']/filtered_properties['sqft']
-    properties_sqft_rent_lot = filtered_properties['lot_sqft']/filtered_properties['sqft']
-    if type == 1: 
-        estimated_rent = sqft*properties_sqft_rent.mean()
-    else: 
-        estimated_rent = sqft*properties_sqft_rent_lot.mean()
-    
-    fifty_pct_rule = estimated_rent*0.5
-    rent_cash_flow = {
-        'estimated_rent':estimated_rent,
-        'fifty_pct_rule': fifty_pct_rule,
-        'rent_per_sqft':properties_sqft_rent.mean(),
-        'rent_per_lot_sqft': properties_sqft_rent_lot.mean(),
-        'basis_number':len(filtered_properties)
-
-        # mortgage_costs should be in here and appreciation
-    }
-
-
-    supabase.table('reports').update({
-        'rent_cash_flow': json.dumps(rent_cash_flow)
-    }).eq('id', report_id).execute()
-
-    print("Rent cash flow successfully upload")
-    return rent_cash_flow
-
-def get_sales_volume(address):
-    listing_type = "sold"
-    sales_volume_six_months = []
-    for i in range(1,6):
+    try:
+        # Fetch properties based on the address
         properties = scrape_property(
             location=address,
             radius=10,
             listing_type=listing_type,
-            past_days=30*i,
+            past_days=past_days,
         )
-        sales_volume_six_months.append(len(properties))
-    return sales_volume_six_months
+    except Exception as e:
+        print(f"Error fetching properties: {e}")
+        return {"message": "Error fetching properties."}
+
+    if properties.empty:
+        return {"message": "No properties found for the given address."}
+
+    try:
+        # Filter out properties with missing 'list_price' or 'sqft'
+        filtered_properties = properties[(properties['list_price'].notna()) & (properties['sqft'].notna()) & (properties['lot_sqft'].notna())]
+        print(f"Number of filtered properties: {len(filtered_properties)}")
+    except Exception as e:
+        print(f"Error filtering properties: {e}")
+        return {"message": "Error filtering properties."}
+
+    try:
+        # Calculate average rent and rent per sqft
+        properties_rent = filtered_properties['list_price'].mean()
+        properties_sqft_rent = filtered_properties['list_price'] / filtered_properties['sqft']
+        properties_sqft_rent_lot = filtered_properties['lot_sqft'] / filtered_properties['sqft']
+    except Exception as e:
+        print(f"Error calculating rent insights: {e}")
+        return {"message": "Error calculating rent insights."}
+
+    try:
+        if type == 1:
+            estimated_rent = sqft * properties_sqft_rent.mean()
+        else:
+            estimated_rent = sqft * properties_sqft_rent_lot.mean()
+    except Exception as e:
+        print(f"Error calculating estimated rent: {e}")
+        return {"message": "Error calculating estimated rent."}
+
+    try:
+        rent_cash_flow = {
+            'estimated_rent': estimated_rent,
+            'rent_per_sqft': properties_sqft_rent.mean(),
+            'rent_per_lot_sqft': properties_sqft_rent_lot.mean(),
+            'basis_number': len(filtered_properties)
+        }
+    except Exception as e:
+        print(f"Error creating rent cash flow dictionary: {e}")
+        return {"message": "Error creating rent cash flow dictionary."}
+
+    try:
+        # Update rent_cash_flow in Supabase
+        supabase.table('reports').update({
+            'rent_cash_flow': rent_cash_flow
+        }).eq('id', report_id).execute()
+        print("Rent cash flow successfully uploaded.")
+    except Exception as e:
+        print(f"Error uploading rent cash flow to Supabase: {e}")
+        return {"message": "Error uploading rent cash flow to database."}
+
+    return rent_cash_flow
+
+
+
 
 
 def fetch_city_census_data(city_name, report_id):
@@ -469,7 +642,7 @@ def fetch_city_census_data(city_name, report_id):
     print(f"Appended census data: {geo_entry['name']}")
 
     supabase.table('reports').update({
-        'census_data': json.dumps(structured_data)
+        'census_data': structured_data
     }).eq('id', report_id).execute()
     # Return the structured data
     return structured_data
@@ -489,78 +662,196 @@ def update_status(report_id, status, client_id):
     }
     response = requests.post(url, json=payload, headers=headers)
     return response.status_code, response.text
+
+
+
+
+def update_flags(report_id, flag):
+    
+    response = supabase.table('reports').select('flags').eq('id', report_id).single().execute()
+    flags = response.data['flags'] if response.data else []
+    flags.push(flag)
+    supabase.table('reports').update({
+        'flags': flags
+        }).eq('id', report_id).execute()
+   
+   
+    
     
     
 def handler(event, context):
     for record in event['Records']:
-        print("RUNNIN CODE!!")
-        body = json.loads(record.get('body', '')) 
-        print(body)
-        report_id = body['report_id']
-        client_id = body['client_id']
-        listing = body['listing']
+        try:
+            print("RUNNING CODE!!")
+            body = json.loads(record.get('body', ''))
+            print(body)
+            
+            try:
+                report_id = body['report_id']
+                client_id = body['client_id']
+                listing = body['listing']
+            except KeyError as e:
+                print(f"KeyError: Missing key {e} in body.")
+                continue
+            
+            try:
+                update_status(report_id, "started", client_id)
+            except Exception as e:
+                print(f"Error updating status to 'started': {e}")
+            
+            try:
+                county = listing['county']
+                city = listing['city']
+                street_line = listing['street']
+                state = listing['state']
+                zipcode = listing['zip_code']
+                lat = listing['latitude']
+                long = listing['longitude']
+                sqft = listing['sqft']
+                lot_sqft = listing['lot_sqft']
+                address = f'{street_line},{city},{state} {zipcode}'
+            except KeyError as e:
+                print(f"KeyError: Missing key {e} in listing.")
+                continue
 
-        update_status(report_id, "started", client_id)
+            # CRIME SCORE
+            try:
+                crime_score, data_to_process = calculate_crime_score(county, city, report_id)
+                print(f"Crime score: {crime_score}")
+                print(f"Data to process: {data_to_process}")
+                update_status(report_id, "crime_done", client_id)
+            except Exception as e:
+                print(f"Error calculating crime score or updating status: {e}")
 
-        county = listing['county']
-        city = listing['city']
-        street_line = listing['street']
-        state = listing['state']
-        zipcode = listing['zip_code']
-        lat = listing['latitude']
-        long = listing['longitude']
-        sqft = listing['sqft']
-        lot_sqft = listing['lot_sqft']
-        address = f'{street_line},{city},{state} {zipcode}'
+            # TRENDS DATA
+            try:
+                trends = scrape_address_data(address, report_id)
+                if trends:
+                    print(f"Successfully uploaded trend data for {city}. Here is the data:\n{trends}")
+                else:
+                    print(f"Failed to upload trend data for {city}")
+                update_status(report_id, "trends_done", client_id)
+            except Exception as e:
+                print(f"Error scraping trends data or updating status: {e}")
 
-        # CRIME SCORE
-        crime_score, data_to_process = calculate_crime_score(county, city, report_id)
-        print(f"Crime score: {crime_score}")
-        print(f"Data to process: {data_to_process}")
+            # SCHOOL SCORE
+            try:
+                scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
+                
+                update_status(report_id, "scraping_done", client_id)
+            except Exception as e:
+                print(f"Error scraping school data or updating status: {e}")
 
-        update_status(report_id, "crime_done", client_id)
+            # CENSUS DATA
+            try:
+                census_data = fetch_city_census_data(city, report_id)
+                if census_data:
+                    print(f"Successfully uploaded census data for {city}. Here is the data: {census_data}")
+                else:
+                    print(f"Failed to upload census data for {city}")
+                update_status(report_id, "census_done", client_id)
+            except Exception as e:
+                print(f"Error fetching census data or updating status: {e}")
 
+            # RENT CASH FLOW
+            try:
+                if sqft == -1:
+                    rent_cash_flow = get_rent_insights(address, lot_sqft, report_id, listing_type="for_rent", past_days=300, type=2)
+                else:
+                    rent_cash_flow = get_rent_insights(address, sqft, report_id, listing_type="for_rent", past_days=300, type=1)
+                
+                if rent_cash_flow:
+                    print(f"Successfully uploaded rent cash flow data for {city}. Here is the data: {rent_cash_flow}")
+                else:
+                    print(f"Failed to upload rent cash flow data for {city}")
+                update_status(report_id, "cash_flow_done", client_id)
+            except Exception as e:
+                print(f"Error fetching rent cash flow data or updating status: {e}")
 
-        trends = scrape_address_data(address,report_id)
+            # Mark as complete
+            try:
+                update_status(report_id, "complete", client_id)
+            except Exception as e:
+                print(f"Error updating status to 'complete': {e}")
 
-        if trends:
-            print(f"Successfully uploaded trend data for {city}. Here is the data:\n{trends}")
-        else:
-            print(f"Failed to upload trend data for {city}")
-        # Process the body payload
-        print(f"Processing message: {body}")
-
-        update_status(report_id, "trends_done", client_id)
-
-        # SCHOOL SCORE
-        school_score = scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
-        print(f"School score: {school_score}")
-
-        update_status(report_id, "school_done", client_id)
-
-
-        census_data = fetch_city_census_data(city,report_id)
-        if census_data:
-            print(f"Successfully uploaded census data for {city}. Here is the data:{census_data}")
-        else:
-            print(f"Failed to upload census data for {city}")
-
-        update_status(report_id, "census_done", client_id)
-
-        if sqft == -1:
-           rent_cash_flow = get_rent_insights(address, lot_sqft, report_id ,listing_type="for_rent", past_days=300, type = 2)
-        else:
-            rent_cash_flow = get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_days=300, type = 1)
-        if rent_cash_flow:
-            print(f"Successfully uploaded rent cash flow data for {city}. Here is the data:{rent_cash_flow}")
-        else:
-            print(f"Failed to upload rent cash flow data for {city}")
-
-        update_status(report_id, "cash_flow_done", client_id)
-
-        update_status(report_id, "complete", client_id)
-
+        except json.JSONDecodeError as e:
+            print(f"JSON decode error: {e}")
+        except Exception as e:
+            print(f"General error processing record: {e}")
+        
     return {
         'statusCode': 200,
         'body': json.dumps('Processing complete')
     }
+
+def get_latest_report():
+    # Fetch the latest report by created time or id, depending on your table's schema
+    try:
+        response = supabase.table('reports').select('*').order('created_at', desc=True).limit(1).execute()
+        if response.data:
+            latest_report = response.data[0]
+            print(f"Latest report retrieved: {latest_report}")
+            return latest_report
+        else:
+            print("No reports found in the table.")
+            return None
+    except Exception as e:
+        print(f"Failed to retrieve the latest report: {e}")
+        return None
+
+def test_handler():
+    event = {
+        {
+        "Records": [
+            {
+            "body": {
+                "report_id": "77e52f27-1e11-49c6-ad6d-ec248238ff31",
+                "listing": {
+                "id": "bc483c42-24b7-4138-853e-7329671fb1b8",
+                "mls": "MRCA",
+                "mls_id": "PW24130567",
+                "status": "PENDING",
+                "property_type": "TOWNHOMES",
+                "full_street_line": "436 Orion Way",
+                "street": "436 Orion Way",
+                "city": "Newport Beach",
+                "state": "CA",
+                "unit": "-1",
+                "zip_code": "92663",
+                "list_price": 1175000,
+                "beds": 3,
+                "days_on_mls": 37,
+                "full_baths": 2,
+                "half_baths": 1,
+                "sqft": 1440,
+                "year_built": 1963,
+                "list_date": "2024-06-26 00:00:00+00",
+                "sold_price": 765000.0,
+                "last_sold_date": "2018-11-29 00:00:00+00",
+                "assessed_value": 804150.0,
+                "estimated_value": 1150900.0,
+                "lot_sqft": 1433,
+                "price_per_sqft": 816.0,
+                "latitude": 33.628274,
+                "longitude": -117.930199,
+                "county": "Orange",
+                "fips_code": "6059",
+                "stories": "2",
+                "hoa_fee": 362.0,
+                "parking_garage": "2.0"
+                }
+            }
+            }
+        ]
+        }
+        
+        # need to put some test data into here
+    }
+    
+
+
+    
+    context = {}
+    response = handler(event,context)
+    print(f"Lambda handler response: {response}")
+    get_latest_report()
