@@ -236,7 +236,7 @@ def scrape_home_details(page, address, report_id):
     
     try:
         supabase.table('reports').update({
-            'home_details': home_details
+            'home_details': json.dumps(home_details)
         }).eq('id', report_id).execute()
     except Exception as e:
         print(f"Failed to update Supabase: {e}")
@@ -359,7 +359,7 @@ def calculate_school_data(school_data, report_id):
     # Update Supabase row in table 'reports' with id = report_id with 'school_score' and 'top_schools'
     supabase.table('reports').update({
         'school_score': average_top_3_score,
-        'top_schools': closest_schools
+        'top_schools': json.dumps(closest_schools)
     }).eq('id', report_id).execute()
 
     
@@ -478,7 +478,7 @@ def scrape_address_data(address, report_id):
     # Update Supabase with metrics
     try:
         supabase.table('reports').update({
-            'market_trends': metrics
+            'market_trends': json.dumps(metrics)
         }).eq('id', report_id).execute()
     except Exception as e:
         print(f"Failed to update Supabase: {e}")
@@ -558,7 +558,7 @@ def get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_da
     try:
         # Update rent_cash_flow in Supabase
         supabase.table('reports').update({
-            'rent_cash_flow': rent_cash_flow
+            'rent_cash_flow': json.dumps(rent_cash_flow)
         }).eq('id', report_id).execute()
         print("Rent cash flow successfully uploaded.")
     except Exception as e:
@@ -665,7 +665,7 @@ def fetch_city_census_data(city_name, report_id):
     print(f"Appended census data: {geo_entry['name']}")
 
     supabase.table('reports').update({
-        'census_data': structured_data
+        'census_data': json.dumps(structured_data)
     }).eq('id', report_id).execute()
     # Return the structured data
     return structured_data
@@ -695,7 +695,7 @@ def update_flags(report_id, flag):
         flags = response.data['flags'] if response.data else []
         flags.append(flag)
         supabase.table('reports').update({
-            'flags': flags
+            'flags': json.dumps(flags)
         }).eq('id', report_id).execute()
     except Exception as e:
         print(f"Error updating flags: {e}")
@@ -709,14 +709,21 @@ def handler(event, context):
             body = json.loads(record.get('body', ''))
             print(body)
             
-            try:
-                report_id = body['report_id']
-                client_id = body['client_id']
-                listing = body['listing']
-            except KeyError as e:
-                print(f"KeyError: Missing key {e} in body.")
-                update_flags(report_id, f"KeyError: Missing key {e} in body.")
-                continue
+            
+            report_id = body['report_id']
+            client_id = body['client_id']
+            listing = body['listing']
+            
+            county = listing['county']
+            city = listing['city']
+            street_line = listing['street']
+            state = listing['state']
+            zipcode = listing['zip_code']
+            lat = listing['latitude']
+            long = listing['longitude']
+            sqft = listing['sqft']
+            lot_sqft = listing['lot_sqft']
+            address = f'{street_line},{city},{state} {zipcode}'
             
             try:
                 update_status(report_id, "started", client_id)
@@ -724,21 +731,9 @@ def handler(event, context):
                 print(f"Error updating status to 'started': {e}")
                 update_flags(report_id, f"Error updating status to 'started': {e}")
             
-            try:
-                county = listing['county']
-                city = listing['city']
-                street_line = listing['street']
-                state = listing['state']
-                zipcode = listing['zip_code']
-                lat = listing['latitude']
-                long = listing['longitude']
-                sqft = listing['sqft']
-                lot_sqft = listing['lot_sqft']
-                address = f'{street_line},{city},{state} {zipcode}'
-            except KeyError as e:
-                print(f"KeyError: Missing key {e} in listing.")
-                update_flags(report_id, f"KeyError: Missing key {e} in listing.")
-                continue
+           
+              
+           
 
             # CRIME SCORE
             try:
@@ -810,14 +805,16 @@ def handler(event, context):
             update_flags(report_id, f"JSON decode error: {e}")
         except Exception as e:
             print(f"General error processing record: {e}")
-            update_flags(report_id, f"General error processing record: {e}")
+            update_flags(report_id, f"General error processing record: ")
         
     return {
         'statusCode': 200,
         'body': json.dumps('Processing complete')
     }
 
-def get_latest_report():
+
+
+"""def get_latest_report():
     # Fetch the latest report by created time or id, depending on your table's schema
     try:
         response = supabase.table('reports').select('*').order('created_at', desc=True).limit(1).execute()
@@ -830,9 +827,9 @@ def get_latest_report():
             return None
     except Exception as e:
         print(f"Failed to retrieve the latest report: {e}")
-        return None
+        return None"""
 
-def test_handler():
+"""def test_handler():
     event = {
         {
         "Records": [
@@ -888,3 +885,4 @@ def test_handler():
     response = handler(event,context)
     print(f"Lambda handler response: {response}")
     get_latest_report()
+"""

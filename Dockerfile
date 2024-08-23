@@ -67,8 +67,8 @@ ADD https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/latest
 RUN chmod +x /usr/local/bin/aws-lambda-rie
 
 # Use the RIE to run the Lambda function if running locally
-#ENTRYPOINT ["/usr/local/bin/aws-lambda-rie", "python3", "-m", "awslambdaric"]
-ENTRYPOINT [ "/usr/local/bin/python", "-m", "awslambdaric" ]
+ENTRYPOINT ["/usr/local/bin/aws-lambda-rie", "python3", "-m", "awslambdaric"]
+#ENTRYPOINT [ "/usr/local/bin/python", "-m", "awslambdaric" ]
 
 # Use the AWS Lambda runtime interface client to start the function
 # CMD ["python3", "-m", "awslambdaric", "index.handler"]
