@@ -704,15 +704,17 @@ def update_flags(report_id, flag):
 
 def handler(event, context):
     for record in event['Records']:
+        print("RUNNING CODE!!")
+        body = json.loads(record.get('body', ''))
+        print(body)
+            
+            
+        report_id = body['report_id']
+        client_id = body['client_id']
+        listing = body['listing']
+        
         try:
-            print("RUNNING CODE!!")
-            body = json.loads(record.get('body', ''))
-            print(body)
-            
-            
-            report_id = body['report_id']
-            client_id = body['client_id']
-            listing = body['listing']
+           
             
             county = listing['county']
             city = listing['city']
@@ -724,7 +726,7 @@ def handler(event, context):
             sqft = listing['sqft']
             lot_sqft = listing['lot_sqft']
             address = f'{street_line},{city},{state} {zipcode}'
-            
+
             try:
                 update_status(report_id, "started", client_id)
             except Exception as e:
