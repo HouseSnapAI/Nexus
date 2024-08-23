@@ -73,3 +73,5 @@ ENV PYTHONPATH=${FUNCTION_DIR}
 # Use the AWS Lambda runtime interface client to start the function
 CMD ["python3", "-m", "awslambdaric", "index.handler"]
 #CMD [ "index.handler" ]
+
+# use aws lambda base image 
