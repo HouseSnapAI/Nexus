@@ -238,8 +238,8 @@ def scrape_home_details(page, address, report_id):
             'home_details': json.dumps(home_details)
         }).eq('id', report_id).execute()
     except Exception as e:
-        print(f"Failed to update Supabase: {e}")
-        update_flags(report_id, "Failed to update Supabase.")
+        print(f"Failed to update home details: {e}")
+        update_flags(report_id, "Failed to update home details.")
     
 
 
@@ -692,7 +692,11 @@ def update_flags(report_id, flag):
     try:
         response = supabase.table('reports').select('flags').eq('id', report_id).single().execute()
         flags = response.data['flags'] if response.data else []
-        flags.append(flag)
+        if flags != None:
+            flags = json.loads(flags)
+            flags.append(flag)
+        else:
+            flags = [flag]
         supabase.table('reports').update({
             'flags': json.dumps(flags)
         }).eq('id', report_id).execute()
