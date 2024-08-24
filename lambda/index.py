@@ -147,7 +147,9 @@ def calculate_crime_score(county: str, city: str, listing_id: str):
     return crime_score, data_to_process
 
 def scrape_home_details(page, address, listing_id):
+    print("ATTEMPTING TO OPEN HOMES.COM")
     page.goto("https://www.homes.com/")
+    print("SUCCEEDED IN OPENING HOMES.COM")
     xpath_search_box = "//input[contains(@class, 'multiselect-search')]"
 
     page.locator(xpath_search_box).click()
@@ -752,8 +754,8 @@ def update_flags(listing_id, flag):
 def handler(event, context):
     for record in event['Records']:
         print("RUNNING CODE!!")
-        # body = json.loads(record.get('body', ''))
-        body = record.get('body', '')
+        body = json.loads(record.get('body', ''))
+        #body = record.get('body', '')
         
         print(body)
             

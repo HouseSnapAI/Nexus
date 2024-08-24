@@ -63,16 +63,16 @@ WORKDIR ${FUNCTION_DIR}
 ENV PYTHONPATH=${FUNCTION_DIR}
 
 # Download the AWS Lambda Runtime Interface Emulator (RIE) if running locally
-ADD https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/latest/download/aws-lambda-rie /usr/local/bin/aws-lambda-rie
-RUN chmod +x /usr/local/bin/aws-lambda-rie
+#ADD https://github.com/aws/aws-lambda-runtime-interface-emulator/releases/latest/download/aws-lambda-rie /usr/local/bin/aws-lambda-rie
+#RUN chmod +x /usr/local/bin/aws-lambda-rie
 
 # Use the RIE to run the Lambda function if running locally
-ENTRYPOINT ["/usr/local/bin/aws-lambda-rie", "python3", "-m", "awslambdaric"]
+#ENTRYPOINT ["/usr/local/bin/aws-lambda-rie", "python3", "-m", "awslambdaric"]
 #ENTRYPOINT [ "/usr/local/bin/python", "-m", "awslambdaric" ]
 
 # Use the AWS Lambda runtime interface client to start the function
-# CMD ["python3", "-m", "awslambdaric", "index.handler"]
-CMD [ "index.handler" ]
+CMD ["python3", "-m", "awslambdaric", "index.handler"]
+#CMD [ "index.handler" ]
 
 # use aws lambda base image 
 
