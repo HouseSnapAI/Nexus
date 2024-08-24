@@ -766,7 +766,7 @@ def handler(event, context):
         
         try:
            
-            
+            listing_id = listing['id']
             county = listing['county']
             city = listing['city']
             street_line = listing['street']
@@ -779,10 +779,10 @@ def handler(event, context):
             address = f'{street_line},{city},{state} {zipcode}'
 
             try:
-                update_status(listing.id, "started", client_id)
+                update_status(listing_id, "started", client_id)
             except Exception as e:
                 print(f"Error updating status to 'started': {e}")
-                update_flags(listing.id, "Error updating status to 'started'.")
+                update_flags(listing_id, "Error updating status to 'started'.")
             
            
               
@@ -790,75 +790,75 @@ def handler(event, context):
 
             # CRIME SCORE
             try:
-                crime_score, data_to_process = calculate_crime_score(county, city, listing.id)
+                crime_score, data_to_process = calculate_crime_score(county, city, listing_id)
                 print(f"Crime score: {crime_score}")
                 print(f"Data to process: {data_to_process}")
-                update_status(listing.id, "crime_done", client_id)
+                update_status(listing_id, "crime_done", client_id)
             except Exception as e:
                 print(f"Error calculating crime score or updating status: {e}")
-                update_flags(listing.id, "Error calculating crime score or updating status.")
+                update_flags(listing_id, "Error calculating crime score or updating status.")
 
             # TRENDS DATA
             try:
-                trends = scrape_address_data(address, listing.id)
+                trends = scrape_address_data(address, listing_id)
                 if trends:
                     print(f"Successfully uploaded trend data for {city}. Here is the data:\n{trends}")
                 else:
                     print(f"Failed to upload trend data for {city}")
-                update_status(listing.id, "trends_done", client_id)
+                update_status(listing_id, "trends_done", client_id)
             except Exception as e:
                 print(f"Error scraping trends data or updating status: {e}")
-                update_flags(listing.id, "Error scraping trends data or updating status.")
+                update_flags(listing_id, "Error scraping trends data or updating status.")
 
             # SCHOOL SCORE
             try:
-                scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing.id)
-                update_status(listing.id, "scraping_done", client_id)
+                scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id)
+                update_status(listing_id, "scraping_done", client_id)
             except Exception as e:
                 print(f"Error scraping school data or updating status: {e}")
-                update_flags(listing.id, "Error scraping school data or updating status.")
+                update_flags(listing_id, "Error scraping school data or updating status.")
 
             # CENSUS DATA
             try:
-                census_data = fetch_city_census_data(city, listing.id)
+                census_data = fetch_city_census_data(city, listing_id)
                 if census_data:
                     print(f"Successfully uploaded census data for {city}. Here is the data: {census_data}")
                 else:
                     print(f"Failed to upload census data for {city}")
-                update_status(listing.id, "census_done", client_id)
+                update_status(listing_id, "census_done", client_id)
             except Exception as e:
                 print(f"Error fetching census data or updating status: {e}")
-                update_flags(listing.id, "Error fetching census data or updating status.")
+                update_flags(listing_id, "Error fetching census data or updating status.")
 
             # RENT CASH FLOW
             try:
                 if sqft == -1:
-                    rent_cash_flow = get_rent_insights(address, lot_sqft, listing.id, listing_type="for_rent", past_days=300, type=2)
+                    rent_cash_flow = get_rent_insights(address, lot_sqft, listing_id, listing_type="for_rent", past_days=300, type=2)
                 else:
-                    rent_cash_flow = get_rent_insights(address, sqft, listing.id, listing_type="for_rent", past_days=300, type=1)
+                    rent_cash_flow = get_rent_insights(address, sqft, listing_id, listing_type="for_rent", past_days=300, type=1)
                 
                 if rent_cash_flow:
                     print(f"Successfully uploaded rent cash flow data for {city}. Here is the data: {rent_cash_flow}")
                 else:
                     print(f"Failed to upload rent cash flow data for {city}")
-                update_status(listing.id, "cash_flow_done", client_id)
+                update_status(listing_id, "cash_flow_done", client_id)
             except Exception as e:
                 print(f"Error fetching rent cash flow data or updating status: {e}")
-                update_flags(listing.id, "Error fetching rent cash flow data or updating status.")
+                update_flags(listing_id, "Error fetching rent cash flow data or updating status.")
 
             # Mark as complete
             try:
-                update_status(listing.id, "complete", client_id)
+                update_status(listing_id, "complete", client_id)
             except Exception as e:
                 print(f"Error updating status to 'complete': {e}")
-                update_flags(listing.id, "Error updating status to 'complete'.")
+                update_flags(listing_id, "Error updating status to 'complete'.")
 
         except json.JSONDecodeError as e:
             print(f"JSON decode error: {e}")
-            update_flags(listing.id, "JSON decode error.")
+            update_flags(listing_id, "JSON decode error.")
         except Exception as e:
             print(f"General error processing record: {e}")
-            update_flags(listing.id, f"General error processing record: ")
+            update_flags(listing_id, f"General error processing record: ")
         
     return {
         'statusCode': 200,
