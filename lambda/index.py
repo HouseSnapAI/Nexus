@@ -11,6 +11,7 @@ import pandas as pd
 from pandas.tseries.offsets import DateOffset
 from datetime import datetime
 import requests
+import re
 
 
 args=['--no-sandbox', '--disable-setuid-sandbox','--disable-gpu','--single-process']
@@ -29,13 +30,15 @@ def install_dependencies():
     subprocess.check_call(["playwright", "install"])
     
 
-def calculate_crime_score(county: str, city: str, report_id: str):
+scraper_home_tax = []
+
+def calculate_crime_score(county: str, city: str, listing_id: str):
     try:
         county = county.replace(" ", "_").lower()
         city = city.replace(" ", "_").lower()
     except Exception as e:
         print(f"Error processing county or city name: {e}")
-        update_flags(report_id, "Error processing county or city name.")
+        update_flags(listing_id, "Error processing county or city name.")
         return {"message": "Error processing county or city name."}
 
     try:
@@ -47,7 +50,7 @@ def calculate_crime_score(county: str, city: str, report_id: str):
         ).execute()
     except Exception as e:
         print(f"Error fetching crime_score data from Supabase: {e}")
-        update_flags(report_id, "Error fetching crime_score data from Supabase.")
+        update_flags(listing_id, "Error fetching crime_score data from Supabase.")
         return {"message": "Error fetching data from database."}
 
     try:
@@ -64,7 +67,7 @@ def calculate_crime_score(county: str, city: str, report_id: str):
             crime_data_ids.append(item['id'])
     except Exception as e:
         print(f"Error processing fetched data: {e}")
-        update_flags(report_id, "Error processing fetched data.")
+        update_flags(listing_id, "Error processing fetched data.")
         return {"message": "Error processing fetched data."}
 
     # Determine which data to process
@@ -77,7 +80,7 @@ def calculate_crime_score(county: str, city: str, report_id: str):
             print(f"Processing county-level data for {county}")
     except Exception as e:
         print(f"Error determining data to process: {e}")
-        update_flags(report_id, "Error determining data to process.")
+        update_flags(listing_id, "Error determining data to process.")
         return {"message": "Error determining data to process."}
 
     scores = []
@@ -113,7 +116,7 @@ def calculate_crime_score(county: str, city: str, report_id: str):
             print(f"Score for item {res + 1}: {score_10}")
     except Exception as e:
         print(f"Error calculating scores: {e}")
-        update_flags(report_id, "Error calculating scores.")
+        update_flags(listing_id, "Error calculating scores.")
         return {"message": "Error calculating scores."}
 
     try:
@@ -124,7 +127,7 @@ def calculate_crime_score(county: str, city: str, report_id: str):
             crime_score = scores[0] if scores else 0
     except Exception as e:
         print(f"Error calculating crime score: {e}")
-        update_flags(report_id, "Error calculating crime score.")
+        update_flags(listing_id, "Error calculating crime score.")
         return {"message": "Error calculating crime score."}
 
     try:
@@ -134,16 +137,16 @@ def calculate_crime_score(county: str, city: str, report_id: str):
             'crime_score': crime_score
         }
 
-        response = supabase.table('reports').update(update_data).eq('id', report_id).execute()
-        print(f"Updated report {report_id} with crime_data_ids: {crime_data_ids}")
+        response = supabase.table('reports').update(update_data).eq('listing_id', listing_id).execute()
+        print(f"Updated report {listing_id} with crime_data_ids: {crime_data_ids}")
     except Exception as e:
-        print(f"Error updating report {report_id}: {str(e)}")
-        update_flags(report_id, "Error updating report.")
-        return {"message": f"Error updating report {report_id}."}
+        print(f"Error updating report {listing_id}: {str(e)}")
+        update_flags(listing_id, "Error updating report.")
+        return {"message": f"Error updating report {listing_id}."}
 
     return crime_score, data_to_process
 
-def scrape_home_details(page, address, report_id):
+def scrape_home_details(page, address, listing_id):
     page.goto("https://www.homes.com/")
     xpath_search_box = "//input[contains(@class, 'multiselect-search')]"
 
@@ -232,19 +235,37 @@ def scrape_home_details(page, address, report_id):
         },
 
     }
+
+    def convert_tax_history(data):
+    # Extract tax history
+        tax_history = data[0].get("tax_history", [])
     
+    # Function to convert strings like "$6,398" to integers like 6398
+        def to_number(value):
+            return int(re.sub(r'[^\d]', '', value))
+    
+    # Convert the tax history fields from strings to numbers
+        for record in tax_history:
+            record["tax_paid"] = to_number(record["tax_paid"])
+            record["tax_assessment"] = to_number(record["tax_assessment"])
+            record["land"] = to_number(record["land"])
+            record["improvement"] = to_number(record["improvement"])
+    
+        return tax_history
+    
+    scraper_home_tax = convert_tax_history(home_details)
     try:
         supabase.table('reports').update({
             'home_details': json.dumps(home_details)
-        }).eq('id', report_id).execute()
+        }).eq('listing_id', listing_id).execute()
     except Exception as e:
         print(f"Failed to update home details: {e}")
-        update_flags(report_id, "Failed to update home details.")
+        update_flags(listing_id, "Failed to update home details.")
     
 
 
 
-def scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id):
+def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id):
     ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
     url = f"https://www.schooldigger.com/go/CA/search.aspx?searchtype=11&address={street_line.replace(' ', '+')}&city={city.replace(' ', '+')}&state={state}&zip={zipcode}&lat={lat}&long={long}"
 
@@ -291,25 +312,25 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
                 school_data.append(row_data)  # Append the row data as a dictionary
             print("Data scraped successfully.")  # Debugging statement
 
-            calculate_school_data(school_data,report_id)
+            calculate_school_data(school_data,listing_id)
 
            
         except Exception as e:
             print(f"Error in scrape_schooldigger: {str(e)}")
-            update_flags(report_id, "Error in scrape_schooldigger.")
+            update_flags(listing_id, "Error in scrape_schooldigger.")
             raise
         
         
         try:
-            scrape_home_details(page,f'{street_line},{city},{state}',report_id)
+            scrape_home_details(page,f'{street_line},{city},{state}',listing_id)
         except Exception as e:
             print(f"Error in scrape_home_details: {str(e)}")
-            update_flags(report_id, "Error in scrape_home_details.")
+            update_flags(listing_id, "Error in scrape_home_details.")
             raise
             
             
 
-def calculate_school_data(school_data, report_id):
+def calculate_school_data(school_data, listing_id):
 
     # TODO: REFINE
     def calculate_school_score(school):
@@ -355,17 +376,17 @@ def calculate_school_data(school_data, report_id):
     # Calculate the average score of the top 3 schools
     average_top_3_score = sum(school["Score"] for school in top_schools) / 3
 
-    # Update Supabase row in table 'reports' with id = report_id with 'school_score' and 'top_schools'
+    # Update Supabase row in table 'reports' with id = listing_id with 'school_score' and 'top_schools'
     supabase.table('reports').update({
         'school_score': average_top_3_score,
         'top_schools': json.dumps(closest_schools)
-    }).eq('id', report_id).execute()
+    }).eq('listing_id', listing_id).execute()
 
     
 
 
-def scrape_address_data(address, report_id):
-    past_days = 5 * 365  # 5 years worth of days
+def scrape_address_data(address, listing_id):
+    past_days = 5*365  # 5 years worth of days
     radius = 0.5  # 0.5 mile radius
 
     all_properties = pd.DataFrame()
@@ -383,10 +404,31 @@ def scrape_address_data(address, report_id):
             all_properties = pd.concat([all_properties, properties])
     except Exception as e:
         print(f"Failed to scrape properties data: {e}")
-        update_flags(report_id, "Failed to scrape properties data.")
+        update_flags(listing_id, "Failed to scrape properties data.")
+
+
+
+    try:
+       
+        pending_properties = scrape_property(
+                location=address,
+                listing_type="pending",
+                radius=1.5,
+                past_days=90,
+                extra_property_data=True,
+            )
+        
+    except Exception as e:
+        print(f"Failed to scrape pending properties data: {e}")
+        update_flags(listing_id, "Failed to scrape properties data.")
+
+
 
     current_year = datetime.now().year
     metrics = {}
+  
+
+
 
     # Calculate property metrics
     try:
@@ -409,10 +451,11 @@ def scrape_address_data(address, report_id):
             'average_days_on_market': all_properties['days_on_mls'].mean(),
             'median_days_on_market': all_properties['days_on_mls'].median(),
             'range_days_on_market': all_properties['days_on_mls'].max() - all_properties['days_on_mls'].min(),
+            'comparable_homes': pending_properties.to_dict()
         }
     except Exception as e:
         print(f"Failed to calculate property metrics: {e}")
-        update_flags(report_id, "Failed to calculate property metrics.")
+        update_flags(listing_id, "Failed to calculate property metrics.")
 
     # Calculate sales volume
     try:
@@ -436,7 +479,7 @@ def scrape_address_data(address, report_id):
         })
     except Exception as e:
         print(f"Failed to calculate sales volume: {e}")
-        update_flags(report_id, "Failed to calculate sales volume.")
+        update_flags(listing_id, "Failed to calculate sales volume.")
 
     # Calculate median and average house prices for each of the past 5 years
     try:
@@ -453,7 +496,7 @@ def scrape_address_data(address, report_id):
             })
     except Exception as e:
         print(f"Failed to calculate yearly house prices: {e}")
-        update_flags(report_id, "Failed to calculate yearly house prices.")
+        update_flags(listing_id, "Failed to calculate yearly house prices.")
 
     # Get recent sold properties
     try:
@@ -472,20 +515,20 @@ def scrape_address_data(address, report_id):
         metrics['recent_sold_properties'] = recent_sold_properties_list
     except Exception as e:
         print(f"Failed to process recent sold properties: {e}")
-        update_flags(report_id, "Failed to process recent sold properties.")
+        update_flags(listing_id, "Failed to process recent sold properties.")
 
     # Update Supabase with metrics
     try:
         supabase.table('reports').update({
             'market_trends': json.dumps(metrics)
-        }).eq('id', report_id).execute()
+        }).eq('listing_id', listing_id).execute()
     except Exception as e:
         print(f"Failed to update Supabase: {e}")
-        update_flags(report_id, "Failed to update Supabase.")
+        update_flags(listing_id, "Failed to update Supabase.")
 
     return metrics
 
-def get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_days=300, type = 1):
+def get_rent_insights(address, sqft, listing_id ,listing_type="for_rent", past_days=300, type = 1):
     """
     Get insights on the best rent for a particular property based on the rent to square footage ratio.
     
@@ -507,7 +550,7 @@ def get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_da
         )
     except Exception as e:
         print(f"Error fetching properties: {e}")
-        update_flags(report_id, "Error fetching properties.")
+        update_flags(listing_id, "Error fetching properties.")
         return {"message": "Error fetching properties."}
 
     if properties.empty:
@@ -519,7 +562,7 @@ def get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_da
         print(f"Number of filtered properties: {len(filtered_properties)}")
     except Exception as e:
         print(f"Error filtering properties: {e}")
-        update_flags(report_id, "Error filtering properties.")
+        update_flags(listing_id, "Error filtering properties.")
         return {"message": "Error filtering properties."}
 
     try:
@@ -529,7 +572,7 @@ def get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_da
         properties_sqft_rent_lot = filtered_properties['lot_sqft'] / filtered_properties['sqft']
     except Exception as e:
         print(f"Error calculating rent insights: {e}")
-        update_flags(report_id, "Error calculating rent insights.")
+        update_flags(listing_id, "Error calculating rent insights.")
         return {"message": "Error calculating rent insights."}
 
     try:
@@ -539,7 +582,7 @@ def get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_da
             estimated_rent = sqft * properties_sqft_rent_lot.mean()
     except Exception as e:
         print(f"Error calculating estimated rent: {e}")
-        update_flags(report_id, "Error calculating estimated rent.")
+        update_flags(listing_id, "Error calculating estimated rent.")
         return {"message": "Error calculating estimated rent."}
 
     try:
@@ -547,22 +590,23 @@ def get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_da
             'estimated_rent': estimated_rent,
             'rent_per_sqft': properties_sqft_rent.mean(),
             'rent_per_lot_sqft': properties_sqft_rent_lot.mean(),
-            'basis_number': len(filtered_properties)
+            'basis_number': len(filtered_properties),
+            'tax_history': scraper_home_tax
         }
     except Exception as e:
         print(f"Error creating rent cash flow dictionary: {e}")
-        update_flags(report_id, "Error creating rent cash flow dictionary.")
+        update_flags(listing_id, "Error creating rent cash flow dictionary.")
         return {"message": "Error creating rent cash flow dictionary."}
 
     try:
         # Update rent_cash_flow in Supabase
         supabase.table('reports').update({
             'rent_cash_flow': json.dumps(rent_cash_flow)
-        }).eq('id', report_id).execute()
+        }).eq('listing_id', listing_id).execute()
         print("Rent cash flow successfully uploaded.")
     except Exception as e:
         print(f"Error uploading rent cash flow to Supabase: {e}")
-        update_flags(report_id, "Error uploading rent cash flow to database.")
+        update_flags(listing_id, "Error uploading rent cash flow to database.")
         return {"message": "Error uploading rent cash flow to database."}
 
     return rent_cash_flow
@@ -571,7 +615,7 @@ def get_rent_insights(address, sqft, report_id ,listing_type="for_rent", past_da
 
 
 
-def fetch_city_census_data(city_name, report_id):
+def fetch_city_census_data(city_name, listing_id):
     table_info = [
         {"Table ID":"B25001","Title":"Housing Units","Description":"This table provides the total number of housing units in the area."},
         {"Table ID":"B25002","Title":"Occupancy Status","Description":"This table shows whether the housing units are occupied or vacant."},
@@ -620,7 +664,7 @@ def fetch_city_census_data(city_name, report_id):
 
     # If no geographic data found, return the message
     if isinstance(geo_data, str):
-        update_flags(report_id, f"City '{city_name}' not found in the data.")
+        update_flags(listing_id, f"City '{city_name}' not found in the data.")
         return geo_data
 
     geo_entry = geo_data[0]
@@ -665,14 +709,14 @@ def fetch_city_census_data(city_name, report_id):
 
     supabase.table('reports').update({
         'census_data': json.dumps(structured_data)
-    }).eq('id', report_id).execute()
+    }).eq('listing_id', listing_id).execute()
     # Return the structured data
     return structured_data
 
-def update_status(report_id, status, client_id):
+def update_status(listing_id, status, client_id):
     supabase.table('reports').update({
         'status': status
-        }).eq('id', report_id).execute()
+        }).eq('listing_id', listing_id).execute()
     
     url = "https://housesnapai.vercel.app/api/report/event"
     payload = {
@@ -688,9 +732,9 @@ def update_status(report_id, status, client_id):
 
 
 
-def update_flags(report_id, flag):
+def update_flags(listing_id, flag):
     try:
-        response = supabase.table('reports').select('flags').eq('id', report_id).single().execute()
+        response = supabase.table('reports').select('flags').eq('listing_id', listing_id).single().execute()
         flags = response.data['flags'] if response.data else []
         if flags != None:
             flags = json.loads(flags)
@@ -699,7 +743,7 @@ def update_flags(report_id, flag):
             flags = [flag]
         supabase.table('reports').update({
             'flags': json.dumps(flags)
-        }).eq('id', report_id).execute()
+        }).eq('listing_id', listing_id).execute()
     except Exception as e:
         print(f"Error updating flags: {e}")
 
@@ -714,7 +758,7 @@ def handler(event, context):
         print(body)
             
             
-        report_id = body['report_id']
+       
         client_id = body['client_id']
         listing = body['listing']
         
@@ -733,10 +777,10 @@ def handler(event, context):
             address = f'{street_line},{city},{state} {zipcode}'
 
             try:
-                update_status(report_id, "started", client_id)
+                update_status(listing.id, "started", client_id)
             except Exception as e:
                 print(f"Error updating status to 'started': {e}")
-                update_flags(report_id, "Error updating status to 'started'.")
+                update_flags(listing.id, "Error updating status to 'started'.")
             
            
               
@@ -744,75 +788,75 @@ def handler(event, context):
 
             # CRIME SCORE
             try:
-                crime_score, data_to_process = calculate_crime_score(county, city, report_id)
+                crime_score, data_to_process = calculate_crime_score(county, city, listing.id)
                 print(f"Crime score: {crime_score}")
                 print(f"Data to process: {data_to_process}")
-                update_status(report_id, "crime_done", client_id)
+                update_status(listing.id, "crime_done", client_id)
             except Exception as e:
                 print(f"Error calculating crime score or updating status: {e}")
-                update_flags(report_id, "Error calculating crime score or updating status.")
+                update_flags(listing.id, "Error calculating crime score or updating status.")
 
             # TRENDS DATA
             try:
-                trends = scrape_address_data(address, report_id)
+                trends = scrape_address_data(address, listing.id)
                 if trends:
                     print(f"Successfully uploaded trend data for {city}. Here is the data:\n{trends}")
                 else:
                     print(f"Failed to upload trend data for {city}")
-                update_status(report_id, "trends_done", client_id)
+                update_status(listing.id, "trends_done", client_id)
             except Exception as e:
                 print(f"Error scraping trends data or updating status: {e}")
-                update_flags(report_id, "Error scraping trends data or updating status.")
+                update_flags(listing.id, "Error scraping trends data or updating status.")
 
             # SCHOOL SCORE
             try:
-                scrape_schooldigger(street_line, city, state, zipcode, lat, long, report_id)
-                update_status(report_id, "scraping_done", client_id)
+                scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing.id)
+                update_status(listing.id, "scraping_done", client_id)
             except Exception as e:
                 print(f"Error scraping school data or updating status: {e}")
-                update_flags(report_id, "Error scraping school data or updating status.")
+                update_flags(listing.id, "Error scraping school data or updating status.")
 
             # CENSUS DATA
             try:
-                census_data = fetch_city_census_data(city, report_id)
+                census_data = fetch_city_census_data(city, listing.id)
                 if census_data:
                     print(f"Successfully uploaded census data for {city}. Here is the data: {census_data}")
                 else:
                     print(f"Failed to upload census data for {city}")
-                update_status(report_id, "census_done", client_id)
+                update_status(listing.id, "census_done", client_id)
             except Exception as e:
                 print(f"Error fetching census data or updating status: {e}")
-                update_flags(report_id, "Error fetching census data or updating status.")
+                update_flags(listing.id, "Error fetching census data or updating status.")
 
             # RENT CASH FLOW
             try:
                 if sqft == -1:
-                    rent_cash_flow = get_rent_insights(address, lot_sqft, report_id, listing_type="for_rent", past_days=300, type=2)
+                    rent_cash_flow = get_rent_insights(address, lot_sqft, listing.id, listing_type="for_rent", past_days=300, type=2)
                 else:
-                    rent_cash_flow = get_rent_insights(address, sqft, report_id, listing_type="for_rent", past_days=300, type=1)
+                    rent_cash_flow = get_rent_insights(address, sqft, listing.id, listing_type="for_rent", past_days=300, type=1)
                 
                 if rent_cash_flow:
                     print(f"Successfully uploaded rent cash flow data for {city}. Here is the data: {rent_cash_flow}")
                 else:
                     print(f"Failed to upload rent cash flow data for {city}")
-                update_status(report_id, "cash_flow_done", client_id)
+                update_status(listing.id, "cash_flow_done", client_id)
             except Exception as e:
                 print(f"Error fetching rent cash flow data or updating status: {e}")
-                update_flags(report_id, "Error fetching rent cash flow data or updating status.")
+                update_flags(listing.id, "Error fetching rent cash flow data or updating status.")
 
             # Mark as complete
             try:
-                update_status(report_id, "complete", client_id)
+                update_status(listing.id, "complete", client_id)
             except Exception as e:
                 print(f"Error updating status to 'complete': {e}")
-                update_flags(report_id, "Error updating status to 'complete'.")
+                update_flags(listing.id, "Error updating status to 'complete'.")
 
         except json.JSONDecodeError as e:
             print(f"JSON decode error: {e}")
-            update_flags(report_id, "JSON decode error.")
+            update_flags(listing.id, "JSON decode error.")
         except Exception as e:
             print(f"General error processing record: {e}")
-            update_flags(report_id, f"General error processing record: ")
+            update_flags(listing.id, f"General error processing record: ")
         
     return {
         'statusCode': 200,
@@ -842,7 +886,7 @@ def handler(event, context):
         "Records": [
             {
             "body": {
-                "report_id": "77e52f27-1e11-49c6-ad6d-ec248238ff31",
+                "client_id": "test"
                 "listing": {
                 "id": "bc483c42-24b7-4138-853e-7329671fb1b8",
                 "mls": "MRCA",
