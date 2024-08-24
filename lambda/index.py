@@ -763,10 +763,10 @@ def handler(event, context):
        
         client_id = body['client_id']
         listing = body['listing']
+        listing_id = listing['id']
         
         try:
            
-            listing_id = listing['id']
             county = listing['county']
             city = listing['city']
             street_line = listing['street']
