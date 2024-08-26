@@ -34,7 +34,7 @@ def install_dependencies():
     subprocess.check_call(["playwright", "install"])
     
 
-scraper_home_tax = []
+
 
 def calculate_crime_score(county: str, city: str, listing_id: str):
     try:
@@ -101,8 +101,10 @@ def calculate_crime_score(county: str, city: str, listing_id: str):
                 if i == 2021:
                     continue
                 try:
-                    result = data_to_process[res]['all_violent_crime_trend'][1][f'{i}'] / data_to_process[res]['all_violent_crime_trend'][0][f'{i}']
-                    averages.append(result)
+                    divisor = data_to_process[res]['all_violent_crime_trend'][0][f'{i}']
+                    if divisor != 0:
+                        result = data_to_process[res]['all_violent_crime_trend'][1][f'{i}'] / divisor
+                        averages.append(result)
                     print(f"Year: {i}, Result: {result}")
                 except KeyError:
                     print(f"Year: {i} data is missing or incomplete.")
@@ -318,24 +320,8 @@ def scrape_home_details(browser, address, listing_id):
         home_details["walk_score"] = {"tagline": None, "score": None}
         update_flags(listing_id, "Error fetching walk score.")
 
-    def convert_tax_history(data):
-        # Extract tax history
-        tax_history = data.get("tax_history", [])
 
-        # Function to convert strings like "$6,398" to integers like 6398
-        def to_number(value):
-            return int(re.sub(r'[^\d]', '', value))
-
-        # Convert the tax history fields from strings to numbers
-        for record in tax_history:
-            record["tax_paid"] = to_number(record["tax_paid"])
-            record["tax_assessment"] = to_number(record["tax_assessment"])
-            record["land"] = to_number(record["land"])
-            record["improvement"] = to_number(record["improvement"])
-
-        return tax_history
-
-    scraper_home_tax = convert_tax_history(home_details)
+    
     try:
         supabase.table('reports').update({
             'home_details': json.dumps(home_details)
@@ -792,7 +778,7 @@ def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="f
 
         # Prepare rent_cash_flow dictionary
         rent_cash_flow = {
-            'tax_history': scraper_home_tax,  # Assuming this is fetched from another function
+            
             'rent_per_sqft': avg_rent_per_sqft,
             'CMA_approach': {
                 'estimated_rent': estimated_rent_cma,
