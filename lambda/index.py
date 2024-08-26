@@ -536,7 +536,7 @@ import numpy as np
 import json
 from datetime import datetime
 
-def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="for_rent", past_days=300, type=1):
+def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="for_rent", past_days=300):
     """
     Get insights on the best rent for a particular property based on the rent to square footage ratio.
 
@@ -557,7 +557,7 @@ def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="f
     radius_step = 0.5
     comparable_properties_list = []
     minimum_comps = 3
-
+    
     while radius <= max_radius:
         print(f"Fetching properties within {radius} miles...")
         try:
@@ -586,30 +586,36 @@ def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="f
 
         # Step 2: Filter properties with valid rent (list_price), sqft, assessed/estimated price
         try:
+            print("Started to filtered")
             filtered_properties = properties[
                 (properties['list_price'].notna()) &
                 (properties['sqft'].notna()) &
                 ((properties['assessed_value'].notna()) | (properties['estimated_value'].notna()))
             ].copy()
-
+            print("filtered successfully")
             # Filter properties within 5% of the target square footage and price
+            print("starting calculations")
             sqft_lower_bound = sqft * 0.95
             sqft_upper_bound = sqft * 1.05
             price_lower_bound = estimated_value * 0.95
             price_upper_bound = estimated_value * 1.05
-
+            print("Calculations successful")
+            
+            print("starting filtering")
             filtered_properties = filtered_properties[
                 (filtered_properties['sqft'] >= sqft_lower_bound) & 
                 (filtered_properties['sqft'] <= sqft_upper_bound) & 
                 ((filtered_properties['assessed_value'].between(price_lower_bound, price_upper_bound)) |
                  (filtered_properties['estimated_value'].between(price_lower_bound, price_upper_bound)))
             ]
+            print("finished filtering")
 
             # Check if we have enough comparable properties for CMA
             if len(filtered_properties) >= minimum_comps:
                 break  # Exit the loop when enough comps are found
             else:
                 radius += radius_step
+            
 
         except Exception as e:
             print(f"Error filtering properties: {e}")
@@ -655,6 +661,8 @@ def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="f
 
                 if len(filtered_properties) >= minimum_comps:
                     break
+                else:
+                    radius += radius_step
 
             except Exception as e:
                 print(f"Error fetching properties with relaxed criteria: {e}")
@@ -904,9 +912,9 @@ def handler(event, context):
             zipcode = listing['zip_code']
             lat = listing['latitude']
             long = listing['longitude']
-            sqft = listing['sqft']
+            sqft = float(listing['sqft'])
             lot_sqft = listing['lot_sqft']
-            value_estimate = listing['estimated_value']
+            value_estimate = float(listing['assessed_value'])
             address = f'{street_line},{city},{state} {zipcode}'
 
             try:
@@ -964,7 +972,7 @@ def handler(event, context):
             # RENT CASH FLOW
             try:
                 
-                rent_cash_flow = get_rent_insights(address, sqft,value_estimate,listing_id, listing_type="for_rent", past_days=300, type=1)
+                rent_cash_flow = get_rent_insights(address, sqft,listing_id,value_estimate, listing_type="for_rent", past_days=300)
                 
                 if rent_cash_flow:
                     print(f"Successfully uploaded rent cash flow data for {city}. Here is the data: {rent_cash_flow}")
