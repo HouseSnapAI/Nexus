@@ -271,19 +271,28 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
     ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
     url = f"https://www.schooldigger.com/go/CA/search.aspx?searchtype=11&address={street_line.replace(' ', '+')}&city={city.replace(' ', '+')}&state={state}&zip={zipcode}&lat={lat}&long={long}"
 
-    with sync_playwright() as p:
+    proxy = {
+        "server": "http://38.154.227.167:80",
+        "username": "hizxybhc",
+        "password": "7etyqbb24fqo"
+    }
 
+    with sync_playwright() as p:
         print("Launching browser...")
-        browser = p.chromium.launch(headless=True, args=args, timeout=120000)  # Increase timeout to 60 seconds
+        browser = p.chromium.launch(
+            headless=True,
+            args=args,
+            timeout=120000,  # Increase timeout to 60 seconds
+            proxy=proxy
+        )
         print("Browser launched successfully.")
-           
+        
         page = browser.new_page(user_agent=ua)
         page.set_extra_http_headers({
             "sec-ch-ua": '"Chromium";v="125", "Not.A/Brand";v="24"'
         })
         
         try:
-            
             print(f"Navigating to URL: {url}")  # Debugging statement
             page.goto(url, timeout=120000)  # Increase timeout to 120 seconds
             page.wait_for_load_state("domcontentloaded")  # Wait for DOM content to load

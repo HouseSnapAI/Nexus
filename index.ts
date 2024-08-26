@@ -112,6 +112,8 @@ const lambda = new aws.lambda.Function("NexusLambda", {
         variables: {
             SUPABASE_URL: process.env.SUPABASE_URL!,
             SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY!,
+            HTTP_PROXY: "http://hizxybhc:7etyqbb24fqo@38.154.227.167:80",
+            HTTPS_PROXY: "http://hizxybhc:7etyqbb24fqo@38.154.227.167:80",
         },
     },
 }, {
