@@ -152,13 +152,7 @@ def calculate_crime_score(county: str, city: str, listing_id: str):
 
     return crime_score, data_to_process
 
-def scrape_home_details(browser, address, listing_id):
-    context = browser.new_context(proxy={
-        "server": SERVER,
-        "username": USERNAME,
-        "password": PASSWORD
-    })
-    page = context.new_page()
+def scrape_home_details(page, address, listing_id):
     print("ATTEMPTING TO OPEN HOMES.COM")
     page.goto("https://www.homes.com/", timeout=120000)
     print("SUCCEEDED IN OPENING HOMES.COM")
@@ -337,10 +331,18 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
 
     with sync_playwright() as p:
         print("Launching browser...")
+
+        proxy = {
+            "server": SERVER,
+            "username": USERNAME,
+            "password": PASSWORD
+        }
+        
         browser = p.chromium.launch(
             headless=True,
             args=args,
             timeout=120000,
+            proxy=proxy
         )
         print("Browser launched successfully.")
 
@@ -388,7 +390,7 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
             raise
 
         try:
-            scrape_home_details(browser, f'{street_line},{city},{state}', listing_id)
+            scrape_home_details(page, f'{street_line},{city},{state}', listing_id)
         except Exception as e:
             print(f"Error in scrape_home_details: {str(e)}")
             update_flags(listing_id, "Error in scrape_home_details.")
