@@ -175,14 +175,14 @@ def scrape_home_details(browser, address, listing_id):
     home_details = {}
 
     try:
-        home_details["price"] = page.query_selector("#price", timeout=120000).inner_text()
+        home_details["price"] = page.query_selector("#price").inner_text()
     except Exception as e:
         print(f"Error fetching price: {e}")
         home_details["price"] = None
         update_flags(listing_id, "Error fetching price.")
 
     try:
-        home_details["views"] = page.query_selector(".total-views", timeout=120000).inner_text()
+        home_details["views"] = page.query_selector(".total-views").inner_text()
     except Exception as e:
         print(f"Error fetching views: {e}")
         home_details["views"] = None
@@ -190,8 +190,8 @@ def scrape_home_details(browser, address, listing_id):
 
     try:
         home_details["highlights"] = [
-            highlight.query_selector(".highlight-value", timeout=120000).inner_text().strip()
-            for highlight in page.query_selector_all("#highlights-section .highlight", timeout=120000)
+            highlight.query_selector(".highlight-value").inner_text().strip()
+            for highlight in page.query_selector_all("#highlights-section .highlight")
         ]
     except Exception as e:
         print(f"Error fetching highlights: {e}")
@@ -201,10 +201,10 @@ def scrape_home_details(browser, address, listing_id):
     try:
         home_details["home_details"] = [
             {
-                "label": subcategory.query_selector(".amenity-name", timeout=120000).inner_text().strip(),
-                "details": [detail.inner_text().strip() for detail in subcategory.query_selector_all(".amenities-detail", timeout=120000)]
+                "label": subcategory.query_selector(".amenity-name").inner_text().strip(),
+                "details": [detail.inner_text().strip() for detail in subcategory.query_selector_all(".amenities-detail")]
             }
-            for subcategory in page.query_selector_all("#amenities-container .subcategory", timeout=120000)
+            for subcategory in page.query_selector_all("#amenities-container .subcategory")
         ]
     except Exception as e:
         print(f"Error fetching home details: {e}")
@@ -214,10 +214,10 @@ def scrape_home_details(browser, address, listing_id):
     try:
         home_details["neighborhood_kpis"] = [
             {
-                "title": kpi.query_selector(".neighborhood-kpi-card-title", timeout=120000).inner_text(),
-                "text": kpi.query_selector(".neighborhood-kpi-card-text", timeout=120000).inner_text()
+                "title": kpi.query_selector(".neighborhood-kpi-card-title").inner_text(),
+                "text": kpi.query_selector(".neighborhood-kpi-card-text").inner_text()
             }
-            for kpi in page.query_selector_all(".neighborhood-kpi-card", timeout=120000)
+            for kpi in page.query_selector_all(".neighborhood-kpi-card")
         ]
     except Exception as e:
         print(f"Error fetching neighborhood KPIs: {e}")
@@ -227,11 +227,11 @@ def scrape_home_details(browser, address, listing_id):
     try:
         home_details["tax_history"] = [
             {
-                "year": row.query_selector(".tax-year", timeout=120000).inner_text().strip(),
-                "tax_paid": row.query_selector(".tax-amount", timeout=120000).inner_text().strip(),
-                "tax_assessment": row.query_selector(".tax-assessment", timeout=120000).inner_text().strip(),
-                "land": row.query_selector(".tax-land", timeout=120000).inner_text().strip(),
-                "improvement": row.query_selector(".tax-improvement", timeout=120000).inner_text().strip()
+                "year": row.query_selector(".tax-year").inner_text().strip(),
+                "tax_paid": row.query_selector(".tax-amount").inner_text().strip(),
+                "tax_assessment": row.query_selector(".tax-assessment").inner_text().strip(),
+                "land": row.query_selector(".tax-land").inner_text().strip(),
+                "improvement": row.query_selector(".tax-improvement").inner_text().strip()
             }
             for row in page.query_selector_all("#tax-history-container .tax-table .tax-table-body .tax-table-body-row", timeout=120000)
         ]
@@ -243,11 +243,11 @@ def scrape_home_details(browser, address, listing_id):
     try:
         home_details["price_history"] = [
             {
-                "date": row.query_selector(".price-year .long-date", timeout=120000).inner_text().strip(),
-                "event": row.query_selector(".price-event", timeout=120000).inner_text().strip(),
-                "price": row.query_selector(".price-price", timeout=120000).inner_text().strip(),
-                "change": row.query_selector(".price-change", timeout=120000).inner_text().strip(),
-                "sq_ft_price": row.query_selector(".price-sq-ft", timeout=120000).inner_text().strip()
+                "date": row.query_selector(".price-year .long-date").inner_text().strip(),
+                "event": row.query_selector(".price-event").inner_text().strip(),
+                "price": row.query_selector(".price-price").inner_text().strip(),
+                "change": row.query_selector(".price-change").inner_text().strip(),
+                "sq_ft_price": row.query_selector(".price-sq-ft").inner_text().strip()
             }
             for row in page.query_selector_all("#price-history-container .price-table .table-body-row", timeout=120000)
         ]
@@ -259,10 +259,10 @@ def scrape_home_details(browser, address, listing_id):
     try:
         home_details["deed_history"] = [
             {
-                "date": row.query_selector(".deed-date .shorter-date", timeout=120000).inner_text().strip(),
-                "type": row.query_selector(".deed-type", timeout=120000).inner_text().strip(),
-                "sale_price": row.query_selector(".deed-sale-price", timeout=120000).inner_text().strip(),
-                "title_company": row.query_selector(".deed-title-company", timeout=120000).inner_text().strip()
+                "date": row.query_selector(".deed-date .shorter-date").inner_text().strip(),
+                "type": row.query_selector(".deed-type").inner_text().strip(),
+                "sale_price": row.query_selector(".deed-sale-price").inner_text().strip(),
+                "title_company": row.query_selector(".deed-title-company").inner_text().strip()
             }
             for row in page.query_selector_all("#deed-history-container .deed-table .deed-table-body-row", timeout=120000)
         ]
@@ -274,10 +274,10 @@ def scrape_home_details(browser, address, listing_id):
     try:
         home_details["mortgage_history"] = [
             {
-                "date": row.query_selector(".mortgage-date .shorter-date", timeout=120000).inner_text().strip(),
-                "status": row.query_selector(".mortgage-status", timeout=120000).inner_text().strip(),
-                "loan_amount": row.query_selector(".mortgage-amount", timeout=120000).inner_text().strip(),
-                "loan_type": row.query_selector(".mortgage-type", timeout=120000).inner_text().strip()
+                "date": row.query_selector(".mortgage-date .shorter-date").inner_text().strip(),
+                "status": row.query_selector(".mortgage-status").inner_text().strip(),
+                "loan_amount": row.query_selector(".mortgage-amount").inner_text().strip(),
+                "loan_type": row.query_selector(".mortgage-type").inner_text().strip()
             }
             for row in page.query_selector_all("#mortgage-history-container .mortgage-table .table-body-row", timeout=120000)
         ]
@@ -289,11 +289,11 @@ def scrape_home_details(browser, address, listing_id):
     try:
         home_details["transportation"] = [
             {
-                "type": item.query_selector(".transportation-type", timeout=120000).inner_text().strip(),
-                "name": item.query_selector(".transportation-name", timeout=120000).inner_text().strip(),
-                "distance": item.query_selector(".transportation-distance", timeout=120000).inner_text().strip()
+                "type": item.query_selector(".transportation-type").inner_text().strip(),
+                "name": item.query_selector(".transportation-name").inner_text().strip(),
+                "distance": item.query_selector(".transportation-distance").inner_text().strip()
             }
-            for item in page.query_selector_all("#transportation-container .transportation-item", timeout=120000)
+            for item in page.query_selector_all("#transportation-container .transportation-item")
         ]
     except Exception as e:
         print(f"Error fetching transportation: {e}")
@@ -302,8 +302,8 @@ def scrape_home_details(browser, address, listing_id):
 
     try:
         home_details["bike_score"] = {
-            "tagline": page.query_selector("#score-card-container .bike-score .score-card-tagline", timeout=120000).inner_text().strip(),
-            "score": page.query_selector("#score-card-container .bike-score .score-scoretext", timeout=120000).inner_text().strip()
+            "tagline": page.query_selector("#score-card-container .bike-score .score-card-tagline").inner_text().strip(),
+            "score": page.query_selector("#score-card-container .bike-score .score-scoretext").inner_text().strip()
         }
     except Exception as e:
         print(f"Error fetching bike score: {e}")
@@ -312,8 +312,8 @@ def scrape_home_details(browser, address, listing_id):
 
     try:
         home_details["walk_score"] = {
-            "tagline": page.query_selector("#score-card-container .walk-score .score-card-tagline", timeout=120000).inner_text().strip(),
-            "score": page.query_selector("#score-card-container .walk-score .score-scoretext", timeout=120000).inner_text().strip()
+            "tagline": page.query_selector("#score-card-container .walk-score .score-card-tagline").inner_text().strip(),
+            "score": page.query_selector("#score-card-container .walk-score .score-scoretext").inner_text().strip()
         }
     except Exception as e:
         print(f"Error fetching walk score: {e}")
@@ -369,13 +369,13 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
 
             # Scrape the table data
             print("Scraping table data...")  # Debugging statement
-            table = page.query_selector("table.table.table-hover.table-condensed.table-striped.table-bordered.gSurvey.dataTable.no-footer", timeout=120000)
-            rows = page.query_selector_all('//*[@id="tabSchooList"]/tbody/tr', timeout=120000)  # Get all rows from the specified XPath
+            table = page.query_selector("table.table.table-hover.table-condensed.table-striped.table-bordered.gSurvey.dataTable.no-footer")
+            rows = page.query_selector_all('//*[@id="tabSchooList"]/tbody/tr')  # Get all rows from the specified XPath
 
             school_data = []
-            headers = [header.inner_text() for header in page.query_selector_all('//*[@id="tabSchooList_wrapper"]/div/div[2]/div/div[1]/div/table/thead/tr[2]/th', timeout=120000)]  # Extract headers from specified XPath
+            headers = [header.inner_text() for header in page.query_selector_all('//*[@id="tabSchooList_wrapper"]/div/div[2]/div/div[1]/div/table/thead/tr[2]/th')]  # Extract headers from specified XPath
             for row in rows:  # Iterate through all rows
-                cols = row.query_selector_all("td", timeout=120000)  # Get all columns in the current row
+                cols = row.query_selector_all("td")  # Get all columns in the current row
                 row_data = {headers[i]: col.inner_text() for i, col in enumerate(cols)}  # Map headers to data
                 school_data.append(row_data)  # Append the row data as a dictionary
             print("Data scraped successfully.")  # Debugging statement
