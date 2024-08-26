@@ -272,7 +272,7 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
     url = f"https://www.schooldigger.com/go/CA/search.aspx?searchtype=11&address={street_line.replace(' ', '+')}&city={city.replace(' ', '+')}&state={state}&zip={zipcode}&lat={lat}&long={long}"
 
     proxy = {
-        "server": "http://38.154.227.167:80",
+        "server": "http://38.154.227.167:5868",
         "username": "hizxybhc",
         "password": "7etyqbb24fqo"
     }
