@@ -20,6 +20,10 @@ args=['--no-sandbox', '--disable-setuid-sandbox','--disable-gpu','--single-proce
 # Initialize Supabase client
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
+SERVER = os.getenv('SERVER')
+USERNAME = os.getenv('USERNAME')
+PASSWORD = os.getenv('PASSWORD')
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 args=['--no-sandbox', '--disable-setuid-sandbox','--single-process','--disable-gpu']
@@ -272,9 +276,9 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
     url = f"https://www.schooldigger.com/go/CA/search.aspx?searchtype=11&address={street_line.replace(' ', '+')}&city={city.replace(' ', '+')}&state={state}&zip={zipcode}&lat={lat}&long={long}"
 
     proxy = {
-        "server": "http://38.154.227.167:5868",
-        "username": "hizxybhc",
-        "password": "7etyqbb24fqo"
+        "server": SERVER,
+        "username": USERNAME,
+        "password": PASSWORD
     }
 
     with sync_playwright() as p:
