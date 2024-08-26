@@ -371,16 +371,17 @@ def calculate_school_data(school_data, listing_id):
         "middle": [school for school in school_data if grade_in_range(school["Grades"], 7)][:2],
         "high": [school for school in school_data if grade_in_range(school["Grades"], 10)][:2]
     }
-
+    
+    # calc the average
     # Sort schools by score in descending order
-    top_schools = sorted(school_data, key=lambda x: x["Score"], reverse=True)[:3]
+    top_schools = sorted(school_data, key=lambda x: x["Score"], reverse=True)
 
     # Calculate the average score of the top 3 schools
-    average_top_3_score = sum(school["Score"] for school in top_schools) / 3
+    average_top_score = sum(school["Score"] for school in top_schools) / len(top_schools)
 
     # Update Supabase row in table 'reports' with id = listing_id with 'school_score' and 'top_schools'
     supabase.table('reports').update({
-        'school_score': average_top_3_score,
+        'school_score': average_top_score,
         'top_schools': json.dumps(closest_schools)
     }).eq('listing_id', listing_id).execute()
 
@@ -460,6 +461,7 @@ def scrape_address_data(address, listing_id):
         update_flags(listing_id, "Failed to calculate property metrics.")
 
     # Calculate sales volume
+    # YOY
     try:
         current_date = datetime.now()
         all_properties['last_sold_date'] = pd.to_datetime(all_properties['last_sold_date'], errors='coerce')
@@ -530,71 +532,198 @@ def scrape_address_data(address, listing_id):
 
     return metrics
 
-def get_rent_insights(address, sqft, listing_id ,listing_type="for_rent", past_days=300, type = 1):
+import numpy as np
+import json
+from datetime import datetime
+
+def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="for_rent", past_days=300, type=1):
     """
     Get insights on the best rent for a particular property based on the rent to square footage ratio.
-    
+
     Args:
         address (str): The address of the property (city, state, zip).
+        listing_id (int): The listing ID to update in the database.
         listing_type (str): The type of listings to search (for_sale, for_rent, pending).
         past_days (int): How many past days to include in the search.
-    
+        type (int): Indicator to use lot_sqft or sqft for rent calculation.
+
     Returns:
         dict: Dictionary with property details and rent per square foot.
     """
-    try:
-        # Fetch properties based on the address
-        properties = scrape_property(
-            location=address,
-            radius=10,
-            listing_type=listing_type,
-            past_days=past_days,
-        )
-    except Exception as e:
-        print(f"Error fetching properties: {e}")
-        update_flags(listing_id, "Error fetching properties.")
-        return {"message": "Error fetching properties."}
 
-    if properties.empty:
-        return {"message": "No properties found for the given address."}
+    # Initialize radius and settings for fetching properties
+    radius = 0.5
+    max_radius = 10
+    radius_step = 0.5
+    comparable_properties_list = []
+    minimum_comps = 3
 
-    try:
-        # Filter out properties with missing 'list_price' or 'sqft'
-        filtered_properties = properties[(properties['list_price'].notna()) & (properties['sqft'].notna()) & (properties['lot_sqft'].notna())]
-        print(f"Number of filtered properties: {len(filtered_properties)}")
-    except Exception as e:
-        print(f"Error filtering properties: {e}")
-        update_flags(listing_id, "Error filtering properties.")
-        return {"message": "Error filtering properties."}
+    while radius <= max_radius:
+        print(f"Fetching properties within {radius} miles...")
+        try:
+            properties = scrape_property(
+                location=address,
+                radius=radius,
+                listing_type=listing_type,
+                past_days=past_days
+            )
 
+            # Check if the response is valid and not empty
+            if properties is None or properties.empty:
+                print(f"No valid properties found in the response at radius {radius}.")
+                radius += radius_step
+                continue
+
+        except Exception as e:
+            print(f"Error fetching properties: {e}")
+            update_flags(listing_id, "Error fetching properties.")
+            return {"message": "Error fetching properties."}
+
+        # Check if 'list_price' exists in the DataFrame
+        if 'list_price' not in properties.columns:
+            print("Warning: 'list_price' column not found in the dataset.")
+            return {"message": "Error: 'list_price' column not found in the dataset."}
+
+        # Step 2: Filter properties with valid rent (list_price), sqft, assessed/estimated price
+        try:
+            filtered_properties = properties[
+                (properties['list_price'].notna()) &
+                (properties['sqft'].notna()) &
+                ((properties['assessed_value'].notna()) | (properties['estimated_value'].notna()))
+            ].copy()
+
+            # Filter properties within 5% of the target square footage and price
+            sqft_lower_bound = sqft * 0.95
+            sqft_upper_bound = sqft * 1.05
+            price_lower_bound = estimated_value * 0.95
+            price_upper_bound = estimated_value * 1.05
+
+            filtered_properties = filtered_properties[
+                (filtered_properties['sqft'] >= sqft_lower_bound) & 
+                (filtered_properties['sqft'] <= sqft_upper_bound) & 
+                ((filtered_properties['assessed_value'].between(price_lower_bound, price_upper_bound)) |
+                 (filtered_properties['estimated_value'].between(price_lower_bound, price_upper_bound)))
+            ]
+
+            # Check if we have enough comparable properties for CMA
+            if len(filtered_properties) >= minimum_comps:
+                break  # Exit the loop when enough comps are found
+            else:
+                radius += radius_step
+
+        except Exception as e:
+            print(f"Error filtering properties: {e}")
+            update_flags(listing_id, "Error filtering properties.")
+            return {"message": "Error filtering properties."}
+
+    # Step 4: If no comparable properties are found within the max radius, loosen the style and sqft restrictions
+    if len(filtered_properties) < minimum_comps and radius > max_radius:
+        print("Expanding search to include all property styles and relaxing square footage and price restrictions.")
+        radius = 0.5
+        sqft_lower_bound = sqft * 0.90
+        sqft_upper_bound = sqft * 1.10
+        price_lower_bound = estimated_value * 0.90
+        price_upper_bound = estimated_value * 1.10
+
+        while radius <= max_radius:
+            print(f"Fetching properties within {radius} miles with relaxed criteria...")
+            try:
+                properties = scrape_property(
+                    location=address,
+                    radius=radius,
+                    listing_type=listing_type,
+                    past_days=past_days
+                )
+
+                if properties is None or properties.empty:
+                    radius += radius_step
+                    continue
+
+                # Filter properties within relaxed sqft and price criteria
+                filtered_properties = properties[
+                    (properties['list_price'].notna()) &
+                    (properties['sqft'].notna()) &
+                    ((properties['assessed_value'].notna()) | (properties['estimated_value'].notna()))
+                ].copy()
+
+                filtered_properties = filtered_properties[
+                    (filtered_properties['sqft'] >= sqft_lower_bound) & 
+                    (filtered_properties['sqft'] <= sqft_upper_bound) & 
+                    ((filtered_properties['assessed_value'].between(price_lower_bound, price_upper_bound)) |
+                     (filtered_properties['estimated_value'].between(price_lower_bound, price_upper_bound)))
+                ]
+
+                if len(filtered_properties) >= minimum_comps:
+                    break
+
+            except Exception as e:
+                print(f"Error fetching properties with relaxed criteria: {e}")
+                return {"message": "Error fetching properties with relaxed criteria."}
+
+    # Step 5: Calculate rent per square foot and remove outliers using IQR
     try:
-        # Calculate average rent and rent per sqft
-        properties_rent = filtered_properties['list_price'].mean()
-        properties_sqft_rent = filtered_properties['list_price'] / filtered_properties['sqft']
-        properties_sqft_rent_lot = filtered_properties['lot_sqft'] / filtered_properties['sqft']
+        filtered_properties['rent_per_sqft'] = filtered_properties['list_price'] / filtered_properties['sqft']
+        q1 = np.percentile(filtered_properties['rent_per_sqft'], 25)
+        q3 = np.percentile(filtered_properties['rent_per_sqft'], 75)
+        iqr = q3 - q1
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+
+        filtered_properties = filtered_properties[
+            (filtered_properties['rent_per_sqft'] >= lower_bound) & 
+            (filtered_properties['rent_per_sqft'] <= upper_bound)
+        ]
     except Exception as e:
         print(f"Error calculating rent insights: {e}")
         update_flags(listing_id, "Error calculating rent insights.")
         return {"message": "Error calculating rent insights."}
 
     try:
-        if type == 1:
-            estimated_rent = sqft * properties_sqft_rent.mean()
-        else:
-            estimated_rent = sqft * properties_sqft_rent_lot.mean()
-    except Exception as e:
-        print(f"Error calculating estimated rent: {e}")
-        update_flags(listing_id, "Error calculating estimated rent.")
-        return {"message": "Error calculating estimated rent."}
+        # Calculate average rent per square foot and estimated rent based on input_sqft
+        avg_rent_per_sqft = filtered_properties['rent_per_sqft'].mean()
+        estimated_rent_cma = avg_rent_per_sqft * sqft
 
-    try:
+        # Calculate rent range using Property Value Percentage approach
+        rent_low_percent = estimated_value * 0.008
+        rent_high_percent = estimated_value * 0.011
+
+        # Calculate GRM for comparable properties
+        grm_list = []
+        comparable_properties_list = []
+        
+        for _, row in filtered_properties.iterrows():
+            house_price = row['assessed_value'] if pd.notna(row['assessed_value']) else row['estimated_value']
+            annual_rent = row['list_price'] * 12
+            grm = house_price / annual_rent
+            grm_list.append(grm)
+            comparable_properties_list.append({
+                'sqft': row['sqft'],
+                'list_price': row['list_price'],
+                'house_price': house_price,
+                'annual_rent': annual_rent
+            })
+        estimated_grm = np.mean(grm_list)
+        estimated_annual_rent_grm = estimated_value / estimated_grm
+        estimated_monthly_rent_grm = estimated_annual_rent_grm / 12
+
+        # Prepare rent_cash_flow dictionary
         rent_cash_flow = {
-            'estimated_rent': estimated_rent,
-            'rent_per_sqft': properties_sqft_rent.mean(),
-            'rent_per_lot_sqft': properties_sqft_rent_lot.mean(),
-            'basis_number': len(filtered_properties),
-            'tax_history': scraper_home_tax
+            'tax_history': scraper_home_tax,  # Assuming this is fetched from another function
+            'rent_per_sqft': avg_rent_per_sqft,
+            'CMA_approach': {
+                'estimated_rent': estimated_rent_cma,
+                'comparable_properties': comparable_properties_list
+            },
+            'value_percentage_approach': {
+                'rent_low': rent_low_percent,
+                'rent_high': rent_high_percent
+            },
+            'grm_approach': {
+                'estimated_grm': estimated_grm,
+                'estimated_monthly_rent': estimated_monthly_rent_grm
+            }
         }
+
     except Exception as e:
         print(f"Error creating rent cash flow dictionary: {e}")
         update_flags(listing_id, "Error creating rent cash flow dictionary.")
@@ -612,6 +741,7 @@ def get_rent_insights(address, sqft, listing_id ,listing_type="for_rent", past_d
         return {"message": "Error uploading rent cash flow to database."}
 
     return rent_cash_flow
+
 
 
 
@@ -776,6 +906,7 @@ def handler(event, context):
             long = listing['longitude']
             sqft = listing['sqft']
             lot_sqft = listing['lot_sqft']
+            value_estimate = listing['estimated_value']
             address = f'{street_line},{city},{state} {zipcode}'
 
             try:
@@ -832,10 +963,8 @@ def handler(event, context):
 
             # RENT CASH FLOW
             try:
-                if sqft == -1:
-                    rent_cash_flow = get_rent_insights(address, lot_sqft, listing_id, listing_type="for_rent", past_days=300, type=2)
-                else:
-                    rent_cash_flow = get_rent_insights(address, sqft, listing_id, listing_type="for_rent", past_days=300, type=1)
+                
+                rent_cash_flow = get_rent_insights(address, sqft,value_estimate,listing_id, listing_type="for_rent", past_days=300, type=1)
                 
                 if rent_cash_flow:
                     print(f"Successfully uploaded rent cash flow data for {city}. Here is the data: {rent_cash_flow}")
