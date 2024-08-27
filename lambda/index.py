@@ -154,211 +154,157 @@ def calculate_crime_score(county: str, city: str, listing_id: str):
 
     return crime_score, data_to_process
 
-def scrape_home_details(page, address, listing_id):
-    print("ATTEMPTING TO OPEN HOMES.COM")
-    page.goto("https://www.homes.com/", timeout=300000)
-    print("SUCCEEDED IN OPENING HOMES.COM")
-    xpath_search_box = "//input[contains(@class, 'multiselect-search')]"
+def scrape_home_details(address, listing_id):
+    import requests
+    from bs4 import BeautifulSoup
+    import json
 
-    address = " " + address
+    url = "https://www.homes.com/routes/res/consumer/property/autocomplete"
+    headers = {
+        "accept": "application/json",
+        "content-type": "application/json-patch+json",
+        "referer": "https://www.homes.com/",
+        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
+    }
 
-    page.locator(xpath_search_box).click()
-    page.locator(xpath_search_box).type(address, delay=200)
-    page.wait_for_load_state("domcontentloaded")
-    page.locator(xpath_search_box).press("Enter")
-    page.wait_for_load_state("domcontentloaded")
-
-    time.sleep(2)
-
-    home_details = {}
+    body = {
+        "term": address,
+        "transactionType": 1,
+        "limitResult": False,
+        "includeAgent": True,
+        "includeSchools": True,
+        "placeOnlySearch": False
+    }
 
     try:
-        print("Fetching price...")
-        home_details["price"] = page.query_selector("#price").inner_text()
+        response = requests.post(url, headers=headers, json=body)
+        response.raise_for_status()
+        data = response.json()
+        home_url = 'https://www.homes.com' + data['suggestions']['places'][0]['u']
     except Exception as e:
-        print(f"Error fetching price: {e}")
-        home_details["price"] = None
-        update_flags(listing_id, "Error fetching price.")
+        print(f"Error fetching home URL: {e}")
+        update_flags(listing_id, "Error fetching home URL.")
+        return
+
+    get_headers = {
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "accept-language": "en-US,en;q=0.9",
+        "priority": "u=1, i",
+        "cache-control": "max-age=0, no-cache, no-store",
+        "sec-ch-ua": '"Google Chrome";v="93", "Chromium";v="93", "Not;A Brand";v="99"',
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": '"Windows"',
+        "sec-fetch-dest": "document",
+        "sec-fetch-mode": "navigate",
+        "sec-fetch-site": "none",
+        "upgrade-insecure-requests": "1",
+        "user-agent": 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) EdgiOS/117.0.2045.48 Version/17.0 Mobile/15E148 Safari/604.1',
+        "content-type": "text/html; charset=utf-8",
+    }
+
+    proxies = {
+        "http": "http://hizxybhc:7etyqbb24fqo@207.228.7.25:7207",
+    }
 
     try:
-        print("Fetching views...")
-        home_details["views"] = page.query_selector(".total-views").inner_text()
-    except Exception as e:
-        print(f"Error fetching views: {e}")
-        home_details["views"] = None
-        update_flags(listing_id, "Error fetching views.")
-
-    try:
-        print("Fetching highlights...")
-        home_details["highlights"] = [
-            highlight.query_selector(".highlight-value").inner_text().strip()
-            for highlight in page.query_selector_all("#highlights-section .highlight")
-        ]
-    except Exception as e:
-        print(f"Error fetching highlights: {e}")
-        home_details["highlights"] = []
-        update_flags(listing_id, "Error fetching highlights.")
-
-    try:
-        print("Fetching home details...")
-        home_details["home_details"] = [
-            {
-                "label": subcategory.query_selector(".amenity-name").inner_text().strip(),
-                "details": [detail.inner_text().strip() for detail in subcategory.query_selector_all(".amenities-detail")]
-            }
-            for subcategory in page.query_selector_all("#amenities-container .subcategory")
-        ]
+        get_response = requests.get(home_url, headers=get_headers, proxies=proxies, timeout=10)
+        get_response.raise_for_status()
     except Exception as e:
         print(f"Error fetching home details: {e}")
-        home_details["home_details"] = []
         update_flags(listing_id, "Error fetching home details.")
+        return
 
-    try:
-        print("Fetching neighborhood KPIs...")
-        home_details["neighborhood_kpis"] = [
+    soup = BeautifulSoup(get_response.text, 'html.parser')
+
+    def safe_get_text(selector, default=""):
+        element = soup.select_one(selector)
+        return element.get_text(strip=True) if element else default
+
+    home_details = {
+        "price": safe_get_text("#price"),
+        "views": safe_get_text(".total-views"),
+        "highlights": [
+            highlight.select_one(".highlight-value").get_text(strip=True)
+            for highlight in soup.select("#highlights-section .highlight")
+        ] if soup.select("#highlights-section .highlight") else [],
+        "home_details": [
             {
-                "title": kpi.query_selector(".neighborhood-kpi-card-title").inner_text(),
-                "text": kpi.query_selector(".neighborhood-kpi-card-text").inner_text()
+                "label": subcategory.select_one(".amenity-name").get_text(strip=True),
+                "details": [detail.get_text(strip=True) for detail in subcategory.select(".amenities-detail")]
             }
-            for kpi in page.query_selector_all(".neighborhood-kpi-card")
-        ]
-    except Exception as e:
-        print(f"Error fetching neighborhood KPIs: {e}")
-        home_details["neighborhood_kpis"] = []
-        update_flags(listing_id, "Error fetching neighborhood KPIs.")
-
-    try:
-        print("Fetching tax history...")
-        home_details["tax_history"] = [
+            for subcategory in soup.select("#amenities-container .subcategory")
+        ] if soup.select("#amenities-container .subcategory") else [],
+        "neighborhood_kpis": [
             {
-                "year": row.query_selector(".tax-year").inner_text().strip(),
-                "tax_paid": row.query_selector(".tax-amount").inner_text().strip(),
-                "tax_assessment": row.query_selector(".tax-assessment").inner_text().strip(),
-                "land": row.query_selector(".tax-land").inner_text().strip(),
-                "improvement": row.query_selector(".tax-improvement").inner_text().strip()
+                "title": kpi.select_one(".neighborhood-kpi-card-title").get_text(strip=True),
+                "text": kpi.select_one(".neighborhood-kpi-card-text").get_text(strip=True)
             }
-            for row in page.query_selector_all("#tax-history-container .tax-table .tax-table-body .tax-table-body-row")
-        ]
-    except Exception as e:
-        print(f"Error fetching tax history: {e}")
-        home_details["tax_history"] = []
-        update_flags(listing_id, "Error fetching tax history.")
-
-    try:
-        print("Fetching price history...")
-        home_details["price_history"] = [
+            for kpi in soup.select(".neighborhood-kpi-card")
+        ] if soup.select(".neighborhood-kpi-card") else [],
+        "tax_history": [
             {
-                "date": row.query_selector(".price-year .long-date").inner_text().strip(),
-                "event": row.query_selector(".price-event").inner_text().strip(),
-                "price": row.query_selector(".price-price").inner_text().strip(),
-                "change": row.query_selector(".price-change").inner_text().strip(),
-                "sq_ft_price": row.query_selector(".price-sq-ft").inner_text().strip()
+                "year": row.select_one(".tax-year").get_text(strip=True),
+                "tax_paid": row.select_one(".tax-amount").get_text(strip=True),
+                "tax_assessment": row.select_one(".tax-assessment").get_text(strip=True),
+                "land": row.select_one(".tax-land").get_text(strip=True),
+                "improvement": row.select_one(".tax-improvement").get_text(strip=True)
             }
-            for row in page.query_selector_all("#price-history-container .price-table .table-body-row")
-        ]
-    except Exception as e:
-        print(f"Error fetching price history: {e}")
-        home_details["price_history"] = []
-        update_flags(listing_id, "Error fetching price history.")
-
-    try:
-        print("Fetching deed history...")
-        home_details["deed_history"] = [
+            for row in soup.select("#tax-history-container .tax-table .tax-table-body .tax-table-body-row")
+        ] if soup.select("#tax-history-container .tax-table .tax-table-body .tax-table-body-row") else [],
+        "price_history": [
             {
-                "date": row.query_selector(".deed-date .shorter-date").inner_text().strip(),
-                "type": row.query_selector(".deed-type").inner_text().strip(),
-                "sale_price": row.query_selector(".deed-sale-price").inner_text().strip(),
-                "title_company": row.query_selector(".deed-title-company").inner_text().strip()
+                "date": row.select_one(".price-year .long-date").get_text(strip=True) if row.select_one(".price-year .long-date") else "",
+                "event": row.select_one(".price-event").get_text(strip=True) if row.select_one(".price-event") else "",
+                "price": row.select_one(".price-price").get_text(strip=True) if row.select_one(".price-price") else "",
+                "change": row.select_one(".price-change").get_text(strip=True) if row.select_one(".price-change") else "",
+                "sq_ft_price": row.select_one(".price-sq-ft").get_text(strip=True) if row.select_one(".price-sq-ft") else ""
             }
-            for row in page.query_selector_all("#deed-history-container .deed-table .deed-table-body-row")
-        ]
-    except Exception as e:
-        print(f"Error fetching deed history: {e}")
-        home_details["deed_history"] = []
-        update_flags(listing_id, "Error fetching deed history.")
-
-    try:
-        print("Fetching mortgage history...")
-        home_details["mortgage_history"] = [
+            for row in soup.select("#price-history-container .price-table .table-body-row")
+        ] if soup.select("#price-history-container .price-table .table-body-row") else [],
+        "deed_history": [
             {
-                "date": row.query_selector(".mortgage-date .shorter-date").inner_text().strip(),
-                "status": row.query_selector(".mortgage-status").inner_text().strip(),
-                "loan_amount": row.query_selector(".mortgage-amount").inner_text().strip(),
-                "loan_type": row.query_selector(".mortgage-type").inner_text().strip()
+                "date": row.select_one(".deed-date .shorter-date").get_text(strip=True) if row.select_one(".deed-date .shorter-date") else "",
+                "type": row.select_one(".deed-type").get_text(strip=True) if row.select_one(".deed-type") else "",
+                "sale_price": row.select_one(".deed-sale-price").get_text(strip=True) if row.select_one(".deed-sale-price") else "",
+                "title_company": row.select_one(".deed-title-company").get_text(strip=True) if row.select_one(".deed-title-company") else ""
             }
-            for row in page.query_selector_all("#mortgage-history-container .mortgage-table .table-body-row")
-        ]
-    except Exception as e:
-        print(f"Error fetching mortgage history: {e}")
-        home_details["mortgage_history"] = []
-        update_flags(listing_id, "Error fetching mortgage history.")
-
-    try:
-        print("Fetching transportation details...")
-        home_details["transportation"] = [
+            for row in soup.select("#deed-history-container .deed-table .deed-table-body-row")
+        ] if soup.select("#deed-history-container .deed-table .deed-table-body-row") else [],
+        "mortgage_history": [
             {
-                "type": item.query_selector(".transportation-type").inner_text().strip(),
-                "name": item.query_selector(".transportation-name").inner_text().strip(),
-                "distance": item.query_selector(".transportation-distance").inner_text().strip()
+                "date": row.select_one(".mortgage-date .shorter-date").get_text(strip=True) if row.select_one(".mortgage-date .shorter-date") else "",
+                "status": row.select_one(".mortgage-status").get_text(strip=True) if row.select_one(".mortgage-status") else "",
+                "loan_amount": row.select_one(".mortgage-amount").get_text(strip=True) if row.select_one(".mortgage-amount") else "",
+                "loan_type": row.select_one(".mortgage-type").get_text(strip=True) if row.select_one(".mortgage-type") else ""
             }
-            for item in page.query_selector_all("#transportation-container .transportation-item")
-        ]
-    except Exception as e:
-        print(f"Error fetching transportation: {e}")
-        home_details["transportation"] = []
-        update_flags(listing_id, "Error fetching transportation.")
-
-    try:
-        print("Fetching bike score...")
-        home_details["bike_score"] = {
-            "tagline": page.query_selector("#score-card-container .bike-score .score-card-tagline").inner_text().strip(),
-            "score": page.query_selector("#score-card-container .bike-score .score-scoretext").inner_text().strip()
+            for row in soup.select("#mortgage-history-container .mortgage-table .table-body-row")
+        ] if soup.select("#mortgage-history-container .mortgage-table .table-body-row") else [],
+        "transportation": [
+            {
+                "type": item.select_one(".transportation-type").get_text(strip=True) if item.select_one(".transportation-type") else "",
+                "name": item.select_one(".transportation-name").get_text(strip=True) if item.select_one(".transportation-name") else "",
+                "distance": item.select_one(".transportation-distance").get_text(strip=True) if item.select_one(".transportation-distance") else ""
+            }
+            for item in soup.select("#transportation-container .transportation-item")
+        ] if soup.select("#transportation-container .transportation-item") else [],
+        "bike_score": {
+            "tagline": safe_get_text("#score-card-container .bike-score .score-card-tagline"),
+            "score": safe_get_text("#score-card-container .bike-score .score-scoretext")
+        },
+        "walk_score": {
+            "tagline": safe_get_text("#score-card-container .walk-score .score-card-tagline"),
+            "score": safe_get_text("#score-card-container .walk-score .score-scoretext")
         }
-    except Exception as e:
-        print(f"Error fetching bike score: {e}")
-        home_details["bike_score"] = {"tagline": None, "score": None}
-        update_flags(listing_id, "Error fetching bike score.")
+    }
 
     try:
-        print("Fetching walk score...")
-        home_details["walk_score"] = {
-            "tagline": page.query_selector("#score-card-container .walk-score .score-card-tagline").inner_text().strip(),
-            "score": page.query_selector("#score-card-container .walk-score .score-scoretext").inner_text().strip()
-        }
-    except Exception as e:
-        print(f"Error fetching walk score: {e}")
-        home_details["walk_score"] = {"tagline": None, "score": None}
-        update_flags(listing_id, "Error fetching walk score.")
-
-    def convert_tax_history(data):
-        print("Converting tax history...")
-        # Extract tax history
-        tax_history = data.get("tax_history", [])
-
-        # Function to convert strings like "$6,398" to integers like 6398
-        def to_number(value):
-            return int(re.sub(r'[^\d]', '', value))
-
-        # Convert the tax history fields from strings to numbers
-        for record in tax_history:
-            record["tax_paid"] = to_number(record["tax_paid"])
-            record["tax_assessment"] = to_number(record["tax_assessment"])
-            record["land"] = to_number(record["land"])
-            record["improvement"] = to_number(record["improvement"])
-
-        return tax_history
-
-    scraper_home_tax = convert_tax_history(home_details)
-    try:
-        print("Updating home details in Supabase...")
         supabase.table('reports').update({
             'home_details': json.dumps(home_details)
         }).eq('listing_id', listing_id).execute()
-        print("Home details updated successfully.")
+        print("Home details successfully uploaded.")
     except Exception as e:
-        print(f"Failed to update home details: {e}")
-        update_flags(listing_id, "Failed to update home details.")
-
+        print(f"Error uploading home details to Supabase: {e}")
+        update_flags(listing_id, "Error uploading home details to Supabase.")
 
 def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id):
     ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
@@ -441,13 +387,6 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
         except Exception as e:
             print(f"Error in scrape_schooldigger: {str(e)}")
             update_flags(listing_id, "Error in scrape_schooldigger.")
-            raise
-
-        try:
-            scrape_home_details(page, f'{street_line},{city},{state}', listing_id)
-        except Exception as e:
-            print(f"Error in scrape_home_details: {str(e)}")
-            update_flags(listing_id, "Error in scrape_home_details.")
             raise
 
 def calculate_school_data(school_data, listing_id):
@@ -1003,7 +942,6 @@ def handler(event, context):
     for record in event['Records']:
         print("RUNNING CODE!!")
         body = json.loads(record.get('body', ''))
-        #body = record.get('body', '')
         
         print(body)
             
@@ -1066,6 +1004,13 @@ def handler(event, context):
             except Exception as e:
                 print(f"Error scraping school data or updating status: {e}")
                 update_flags(listing_id, "Error scraping school data or updating status.")
+            
+            try:
+                scrape_home_details(f'{street_line},{city},{state}', listing_id)
+            except Exception as e:
+                print(f"Error in scrape_home_details: {str(e)}")
+                update_flags(listing_id, "Error in scrape_home_details.")
+                raise
 
             # CENSUS DATA
             try:
@@ -1111,78 +1056,3 @@ def handler(event, context):
         'statusCode': 200,
         'body': json.dumps('Processing complete')
     }
-
-
-
-"""def get_latest_report():
-    # Fetch the latest report by created time or id, depending on your table's schema
-    try:
-        response = supabase.table('reports').select('*').order('created_at', desc=True).limit(1).execute()
-        if response.data:
-            latest_report = response.data[0]
-            print(f"Latest report retrieved: {latest_report}")
-            return latest_report
-        else:
-            print("No reports found in the table.")
-            return None
-    except Exception as e:
-        print(f"Failed to retrieve the latest report: {e}")
-        return None"""
-
-"""def test_handler():
-    event = {
-        {
-        "Records": [
-            {
-            "body": {
-                "client_id": "test"
-                "listing": {
-                "id": "bc483c42-24b7-4138-853e-7329671fb1b8",
-                "mls": "MRCA",
-                "mls_id": "PW24130567",
-                "status": "PENDING",
-                "property_type": "TOWNHOMES",
-                "full_street_line": "436 Orion Way",
-                "street": "436 Orion Way",
-                "city": "Newport Beach",
-                "state": "CA",
-                "unit": "-1",
-                "zip_code": "92663",
-                "list_price": 1175000,
-                "beds": 3,
-                "days_on_mls": 37,
-                "full_baths": 2,
-                "half_baths": 1,
-                "sqft": 1440,
-                "year_built": 1963,
-                "list_date": "2024-06-26 00:00:00+00",
-                "sold_price": 765000.0,
-                "last_sold_date": "2018-11-29 00:00:00+00",
-                "assessed_value": 804150.0,
-                "estimated_value": 1150900.0,
-                "lot_sqft": 1433,
-                "price_per_sqft": 816.0,
-                "latitude": 33.628274,
-                "longitude": -117.930199,
-                "county": "Orange",
-                "fips_code": "6059",
-                "stories": "2",
-                "hoa_fee": 362.0,
-                "parking_garage": "2.0"
-                }
-            }
-            }
-        ]
-        }
-        
-        # need to put some test data into here
-    }
-    
-
-
-    
-    context = {}
-    response = handler(event,context)
-    print(f"Lambda handler response: {response}")
-    get_latest_report()
-"""
