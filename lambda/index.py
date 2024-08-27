@@ -402,6 +402,7 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
             print("Data scraped successfully.")  # Debugging statement
 
             calculate_school_data(school_data, listing_id)
+            browser.close()
 
         except Exception as e:
             print(f"Error in scrape_schooldigger: {str(e)}")
