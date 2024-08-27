@@ -106,13 +106,13 @@ const lambda = new aws.lambda.Function("NexusLambda", {
     packageType: "Image",
     imageUri: "767397951738.dkr.ecr.us-west-1.amazonaws.com/nexus-engine:latest",
     role: role.arn,
-    timeout: 600,
-    memorySize: 4096, 
+    timeout: 300,
+    memorySize: 3008, 
     environment: {
         variables: {
             SUPABASE_URL: process.env.SUPABASE_URL!,
             SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY!,
-            SERVER: "http://38.154.227.167:5868",
+            SERVER: "http://http://207.228.7.25:7207",
             USERNAME: "hizxybhc",
             PASSWORD: "7etyqbb24fqo"
         },
