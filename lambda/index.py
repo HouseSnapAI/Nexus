@@ -26,9 +26,6 @@ PASSWORD = os.getenv('PASSWORD')
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
 
-args=['--no-sandbox', '--disable-setuid-sandbox','--single-process','--disable-gpu']
-
-
 
 def install_dependencies():
     subprocess.check_call(["playwright", "install"])
@@ -154,15 +151,17 @@ def calculate_crime_score(county: str, city: str, listing_id: str):
 
 def scrape_home_details(page, address, listing_id):
     print("ATTEMPTING TO OPEN HOMES.COM")
-    page.goto("https://www.homes.com/", timeout=120000)
+    page.goto("https://www.homes.com/", timeout=300000)
     print("SUCCEEDED IN OPENING HOMES.COM")
     xpath_search_box = "//input[contains(@class, 'multiselect-search')]"
 
-    page.locator(xpath_search_box).click(timeout=120000)
-    page.locator(xpath_search_box).type(address, delay=200, timeout=120000)
-    page.wait_for_load_state("domcontentloaded", timeout=120000)
-    page.locator(xpath_search_box).press("Enter", timeout=120000)
-    page.wait_for_load_state("domcontentloaded", timeout=120000)
+    address = " " + address
+
+    page.locator(xpath_search_box).click()
+    page.locator(xpath_search_box).type(address, delay=200)
+    page.wait_for_load_state("domcontentloaded")
+    page.locator(xpath_search_box).press("Enter")
+    page.wait_for_load_state("domcontentloaded")
 
     time.sleep(2)
 
