@@ -1,7 +1,6 @@
 import json
 import os
 import subprocess
-import sys
 import time
 from supabase import create_client, Client
 from playwright.sync_api import sync_playwright
@@ -12,10 +11,18 @@ from pandas.tseries.offsets import DateOffset
 from datetime import datetime
 import requests
 import re
+import random
 
 
-args=['--disable-gpu','--single-process']
+args=['--disable-gpu',
+      '--single-process',
+        "--no-sandbox",
+        "--disable-infobars",
+        "--start-maximized",
+        "--window-position=-10,0",
+    ]
 
+ignore_default_args = ["--enable-automation"]
 
 # Initialize Supabase client
 SUPABASE_URL = os.getenv('SUPABASE_URL')
@@ -350,19 +357,38 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
             "username": USERNAME,
             "password": PASSWORD
         }
+
+        def get_random_viewport_size(dis_width, dis_height):
+
+            return {
+                "width": random.randint(int(dis_width / 2), dis_width),
+                "height": random.randint(int(dis_height / 2), dis_height),
+            }
+
+        dis_width, dis_height = random.randint(1685, 1700), random.randint(950, 969)
         
         browser = p.chromium.launch(
             headless=True,
             args=args,
             timeout=300000,
-            proxy=proxy
+            proxy=proxy,
+            ignore_default_args=ignore_default_args
         )
         print("Browser launched successfully.")
+        context = browser.new_context(
+            user_agent=ua,
+            viewport={"width": dis_width, "height": dis_height},
+            color_scheme="dark",
+            screen=get_random_viewport_size(dis_width, dis_height),
+            proxy=proxy
+        )
 
-        page = browser.new_page(user_agent=ua)
-        page.set_extra_http_headers({
-            "sec-ch-ua": '"Chromium";v="125", "Not.A/Brand";v="24"'
-        })
+        page = context.new_page()
+        page.set_default_timeout(300 * 1000)
+        # page.set_extra_http_headers({
+        #     "sec-ch-ua": '"Chromium";v="125", "Not.A/Brand";v="24"'
+        # }) 
+        # UNCOMMENT AND TRY IF IT DONT WORK
 
         try:
             print(f"Navigating to URL: {url}")  # Debugging statement
