@@ -109,7 +109,7 @@ def calculate_crime_score(county: str, city: str, listing_id: str):
                     if divisor != 0:
                         result = data_to_process[res]['all_violent_crime_trend'][1][f'{i}'] / divisor
                         averages.append(result)
-                    print(f"Year: {i}, Result: {result}")
+                        print(f"Year: {i}, Result: {result}")
                 except KeyError:
                     print(f"Year: {i} data is missing or incomplete.")
                     continue
