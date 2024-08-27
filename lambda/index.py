@@ -180,8 +180,11 @@ def scrape_home_details(address, listing_id):
 
     try:
         response = requests.post(url, headers=headers, json=body)
+        print("getting home url")
         response.raise_for_status()
+        print(f"response {response}")
         data = response.json()
+        print(f"data {data}")
         home_url = 'https://www.homes.com' + data['suggestions']['places'][0]['u']
     except Exception as e:
         print(f"Error fetching home URL: {e}")
@@ -209,15 +212,18 @@ def scrape_home_details(address, listing_id):
     }
 
     try:
+        print(f"home_url {home_url}")
         get_response = requests.get(home_url, headers=get_headers, proxies=proxies, timeout=10)
+        print(f"get_response {get_response}")
         get_response.raise_for_status()
+        print(f"get_response.text {get_response.text}")
     except Exception as e:
         print(f"Error fetching home details: {e}")
         update_flags(listing_id, "Error fetching home details.")
         return
 
     soup = BeautifulSoup(get_response.text, 'html.parser')
-
+    print(f"soupifying")
     def safe_get_text(selector, default=""):
         element = soup.select_one(selector)
         return element.get_text(strip=True) if element else default
@@ -228,21 +234,33 @@ def scrape_home_details(address, listing_id):
         "highlights": [
             highlight.select_one(".highlight-value").get_text(strip=True)
             for highlight in soup.select("#highlights-section .highlight")
-        ] if soup.select("#highlights-section .highlight") else [],
+        ] if soup.select("#highlights-section .highlight") else []
+    }
+    print("Finished extracting highlights")
+
+    home_details.update({
         "home_details": [
             {
                 "label": subcategory.select_one(".amenity-name").get_text(strip=True),
                 "details": [detail.get_text(strip=True) for detail in subcategory.select(".amenities-detail")]
             }
             for subcategory in soup.select("#amenities-container .subcategory")
-        ] if soup.select("#amenities-container .subcategory") else [],
+        ] if soup.select("#amenities-container .subcategory") else []
+    })
+    print("Finished extracting home details")
+
+    home_details.update({
         "neighborhood_kpis": [
             {
                 "title": kpi.select_one(".neighborhood-kpi-card-title").get_text(strip=True),
                 "text": kpi.select_one(".neighborhood-kpi-card-text").get_text(strip=True)
             }
             for kpi in soup.select(".neighborhood-kpi-card")
-        ] if soup.select(".neighborhood-kpi-card") else [],
+        ] if soup.select(".neighborhood-kpi-card") else []
+    })
+    print("Finished extracting neighborhood KPIs")
+
+    home_details.update({
         "tax_history": [
             {
                 "year": row.select_one(".tax-year").get_text(strip=True),
@@ -252,7 +270,11 @@ def scrape_home_details(address, listing_id):
                 "improvement": row.select_one(".tax-improvement").get_text(strip=True)
             }
             for row in soup.select("#tax-history-container .tax-table .tax-table-body .tax-table-body-row")
-        ] if soup.select("#tax-history-container .tax-table .tax-table-body .tax-table-body-row") else [],
+        ] if soup.select("#tax-history-container .tax-table .tax-table-body .tax-table-body-row") else []
+    })
+    print("Finished extracting tax history")
+
+    home_details.update({
         "price_history": [
             {
                 "date": row.select_one(".price-year .long-date").get_text(strip=True) if row.select_one(".price-year .long-date") else "",
@@ -262,7 +284,11 @@ def scrape_home_details(address, listing_id):
                 "sq_ft_price": row.select_one(".price-sq-ft").get_text(strip=True) if row.select_one(".price-sq-ft") else ""
             }
             for row in soup.select("#price-history-container .price-table .table-body-row")
-        ] if soup.select("#price-history-container .price-table .table-body-row") else [],
+        ] if soup.select("#price-history-container .price-table .table-body-row") else []
+    })
+    print("Finished extracting price history")
+
+    home_details.update({
         "deed_history": [
             {
                 "date": row.select_one(".deed-date .shorter-date").get_text(strip=True) if row.select_one(".deed-date .shorter-date") else "",
@@ -271,7 +297,11 @@ def scrape_home_details(address, listing_id):
                 "title_company": row.select_one(".deed-title-company").get_text(strip=True) if row.select_one(".deed-title-company") else ""
             }
             for row in soup.select("#deed-history-container .deed-table .deed-table-body-row")
-        ] if soup.select("#deed-history-container .deed-table .deed-table-body-row") else [],
+        ] if soup.select("#deed-history-container .deed-table .deed-table-body-row") else []
+    })
+    print("Finished extracting deed history")
+
+    home_details.update({
         "mortgage_history": [
             {
                 "date": row.select_one(".mortgage-date .shorter-date").get_text(strip=True) if row.select_one(".mortgage-date .shorter-date") else "",
@@ -280,7 +310,11 @@ def scrape_home_details(address, listing_id):
                 "loan_type": row.select_one(".mortgage-type").get_text(strip=True) if row.select_one(".mortgage-type") else ""
             }
             for row in soup.select("#mortgage-history-container .mortgage-table .table-body-row")
-        ] if soup.select("#mortgage-history-container .mortgage-table .table-body-row") else [],
+        ] if soup.select("#mortgage-history-container .mortgage-table .table-body-row") else []
+    })
+    print("Finished extracting mortgage history")
+
+    home_details.update({
         "transportation": [
             {
                 "type": item.select_one(".transportation-type").get_text(strip=True) if item.select_one(".transportation-type") else "",
@@ -288,7 +322,11 @@ def scrape_home_details(address, listing_id):
                 "distance": item.select_one(".transportation-distance").get_text(strip=True) if item.select_one(".transportation-distance") else ""
             }
             for item in soup.select("#transportation-container .transportation-item")
-        ] if soup.select("#transportation-container .transportation-item") else [],
+        ] if soup.select("#transportation-container .transportation-item") else []
+    })
+    print("Finished extracting transportation details")
+
+    home_details.update({
         "bike_score": {
             "tagline": safe_get_text("#score-card-container .bike-score .score-card-tagline"),
             "score": safe_get_text("#score-card-container .bike-score .score-scoretext")
@@ -297,7 +335,8 @@ def scrape_home_details(address, listing_id):
             "tagline": safe_get_text("#score-card-container .walk-score .score-card-tagline"),
             "score": safe_get_text("#score-card-container .walk-score .score-scoretext")
         }
-    }
+    })
+    print("Finished extracting bike and walk scores")
 
     try:
         supabase.table('reports').update({
@@ -991,7 +1030,8 @@ def handler(event, context):
                 update_flags(listing_id, "Error scraping school data or updating status.")
             
             try:
-                scrape_home_details(f'{street_line},{city},{state}', listing_id)
+                scrape_home_details(f'{street_line},{city}', listing_id)
+                update_status(listing_id, "home_details_done", client_id)
             except Exception as e:
                 print(f"Error in scrape_home_details: {str(e)}")
                 update_flags(listing_id, "Error in scrape_home_details.")
