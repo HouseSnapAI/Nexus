@@ -166,7 +166,7 @@ def scrape_home_details(address, listing_id):
     }
     print(f"body {body}")
     try:
-        response = requests.post(url, headers=headers, json=body)
+        response = requests.post(url, headers=headers, json=body, timeout=10, proxies=proxies)
         print("getting home url")
         response.raise_for_status()
         print(f"response {response}")
