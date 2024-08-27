@@ -300,21 +300,6 @@ def scrape_home_details(address, listing_id):
     }
 
     try:
-<<<<<<< HEAD
-        home_details["walk_score"] = {
-            "tagline": page.query_selector("#score-card-container .walk-score .score-card-tagline").inner_text().strip(),
-            "score": page.query_selector("#score-card-container .walk-score .score-scoretext").inner_text().strip()
-        }
-    except Exception as e:
-        print(f"Error fetching walk score: {e}")
-        home_details["walk_score"] = {"tagline": None, "score": None}
-        update_flags(listing_id, "Error fetching walk score.")
-
-
-    
-    try:
-=======
->>>>>>> 86e73dea89632b132aee33024db88290d5a7abbb
         supabase.table('reports').update({
             'home_details': json.dumps(home_details)
         }).eq('listing_id', listing_id).execute()
