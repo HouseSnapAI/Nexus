@@ -14,7 +14,7 @@ import requests
 import re
 
 
-args=['--no-sandbox', '--disable-setuid-sandbox','--disable-gpu','--single-process']
+args=['--disable-gpu','--single-process']
 
 
 # Initialize Supabase client
