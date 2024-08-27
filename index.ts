@@ -106,7 +106,7 @@ const lambda = new aws.lambda.Function("NexusLambda", {
     packageType: "Image",
     imageUri: "767397951738.dkr.ecr.us-west-1.amazonaws.com/nexus-engine:latest",
     role: role.arn,
-    timeout: 300, // Set timeout to 5 minutes
+    timeout: 600, // Set timeout to 5 minutes
     memorySize: 2048, 
     environment: {
         variables: {
