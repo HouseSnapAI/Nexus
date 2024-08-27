@@ -20,6 +20,10 @@ args=['--disable-gpu',
 
 ignore_default_args = ["--enable-automation"]
 
+proxies = {
+        "http": "http://hizxybhc:7etyqbb24fqo@207.228.7.25:7207",
+    }
+
 # Initialize Supabase client
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 SUPABASE_ANON_KEY = os.getenv('SUPABASE_ANON_KEY')
@@ -192,10 +196,6 @@ def scrape_home_details(address, listing_id):
         "upgrade-insecure-requests": "1",
         "user-agent": 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) EdgiOS/117.0.2045.48 Version/17.0 Mobile/15E148 Safari/604.1',
         "content-type": "text/html; charset=utf-8",
-    }
-
-    proxies = {
-        "http": "http://hizxybhc:7etyqbb24fqo@207.228.7.25:7207",
     }
 
     try:
