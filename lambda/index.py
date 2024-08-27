@@ -338,6 +338,9 @@ def scrape_home_details(address, listing_id):
     })
     print("Finished extracting bike and walk scores")
 
+    
+
+    
     try:
         supabase.table('reports').update({
             'home_details': json.dumps(home_details)
@@ -593,6 +596,12 @@ def scrape_address_data(address, listing_id):
     except Exception as e:
         print(f"Failed to process recent sold properties: {e}")
         update_flags(listing_id, "Failed to process recent sold properties.")
+    
+    for key, value in metrics.item():
+        if isinstance(value,np.int64):
+            metrics[key] = int(value)
+        elif isinstance(value,np.float64):
+            metrics[key] = float(value)
 
     # Update Supabase with metrics
     try:
