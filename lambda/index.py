@@ -1,18 +1,14 @@
-import json
 import os
-import subprocess
-import time
 from supabase import create_client, Client
 from playwright.sync_api import sync_playwright
 from homeharvest import scrape_property
 from datetime import datetime
 import pandas as pd
 from pandas.tseries.offsets import DateOffset
-from datetime import datetime
 import requests
-import re
-import random
-
+from bs4 import BeautifulSoup
+import json
+import numpy as np
 
 args=['--disable-gpu',
       '--single-process',
@@ -32,13 +28,6 @@ USERNAME = os.getenv('USERNAME')
 PASSWORD = os.getenv('PASSWORD')
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-
-
-def install_dependencies():
-    subprocess.check_call(["playwright", "install"])
-    
-
-
 
 def calculate_crime_score(county: str, city: str, listing_id: str):
     try:
@@ -157,18 +146,16 @@ def calculate_crime_score(county: str, city: str, listing_id: str):
     return crime_score, data_to_process
 
 def scrape_home_details(address, listing_id):
-    import requests
-    from bs4 import BeautifulSoup
-    import json
-
+    print("scraping home details")
     url = "https://www.homes.com/routes/res/consumer/property/autocomplete"
+    print(f"url {url}")
     headers = {
         "accept": "application/json",
         "content-type": "application/json-patch+json",
         "referer": "https://www.homes.com/",
         "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
     }
-
+    print(f"headers {headers}")
     body = {
         "term": address,
         "transactionType": 1,
@@ -177,7 +164,7 @@ def scrape_home_details(address, listing_id):
         "includeSchools": True,
         "placeOnlySearch": False
     }
-
+    print(f"body {body}")
     try:
         response = requests.post(url, headers=headers, json=body)
         print("getting home url")
@@ -400,11 +387,14 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
                 row_data = {headers[i]: col.inner_text() for i, col in enumerate(cols)}  # Map headers to data
                 school_data.append(row_data)  # Append the row data as a dictionary
             print("Data scraped successfully.")  # Debugging statement
-
-            calculate_school_data(school_data, listing_id)
             browser.close()
 
+            calculate_school_data(school_data, listing_id)
+            print("Done calculating school data")
+            return
+
         except Exception as e:
+            browser.close()
             print(f"Error in scrape_schooldigger: {str(e)}")
             update_flags(listing_id, "Error in scrape_schooldigger.")
             raise
@@ -461,9 +451,6 @@ def calculate_school_data(school_data, listing_id):
         'school_score': average_top_score,
         'top_schools': json.dumps(closest_schools)
     }).eq('listing_id', listing_id).execute()
-
-    
-
 
 def scrape_address_data(address, listing_id):
     past_days = 5*365  # 5 years worth of days
@@ -614,10 +601,6 @@ def scrape_address_data(address, listing_id):
         update_flags(listing_id, "Failed to update Supabase Market Trends.")
 
     return metrics
-
-import numpy as np
-import json
-from datetime import datetime
 
 def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="for_rent", past_days=300):
     """
@@ -834,10 +817,6 @@ def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="f
     return rent_cash_flow
 
 
-
-
-
-
 def fetch_city_census_data(city_name, listing_id):
     table_info = [
         {"Table ID":"B25001","Title":"Housing Units","Description":"This table provides the total number of housing units in the area."},
@@ -1035,11 +1014,13 @@ def handler(event, context):
             try:
                 scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id)
                 update_status(listing_id, "scraping_done", client_id)
+                print("scraping school data and updating done")
             except Exception as e:
                 print(f"Error scraping school data or updating status: {e}")
                 update_flags(listing_id, "Error scraping school data or updating status.")
             
             try:
+                print("scraping home details")
                 scrape_home_details(f'{street_line},{city}', listing_id)
                 update_status(listing_id, "home_details_done", client_id)
             except Exception as e:
