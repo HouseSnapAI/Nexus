@@ -312,40 +312,15 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
 
     with sync_playwright() as p:
         print("Launching browser...")
-
-        proxy = {
-            "server": SERVER,
-            "username": USERNAME,
-            "password": PASSWORD
-        }
-
-        def get_random_viewport_size(dis_width, dis_height):
-
-            return {
-                "width": random.randint(int(dis_width / 2), dis_width),
-                "height": random.randint(int(dis_height / 2), dis_height),
-            }
-
-        dis_width, dis_height = random.randint(1685, 1700), random.randint(950, 969)
         
         browser = p.chromium.launch(
             headless=True,
             args=args,
-            timeout=300000,
-            proxy=proxy,
-            ignore_default_args=ignore_default_args
+            timeout=120000,
         )
         print("Browser launched successfully.")
-        context = browser.new_context(
-            user_agent=ua,
-            viewport={"width": dis_width, "height": dis_height},
-            color_scheme="dark",
-            screen=get_random_viewport_size(dis_width, dis_height),
-            proxy=proxy
-        )
 
-        page = context.new_page()
-        page.set_default_timeout(300 * 1000)
+        page = browser.new_page(user_agent=ua)
         # page.set_extra_http_headers({
         #     "sec-ch-ua": '"Chromium";v="125", "Not.A/Brand";v="24"'
         # }) 
@@ -353,18 +328,18 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
 
         try:
             print(f"Navigating to URL: {url}")  # Debugging statement
-            page.goto(url, timeout=300000)  # Increase timeout to 120 seconds
-            page.wait_for_load_state("domcontentloaded", timeout=300000)  # Wait for DOM content to load
+            page.goto(url, timeout=120000)  # Increase timeout to 120 seconds
+            page.wait_for_load_state("domcontentloaded", timeout=120000)  # Wait for DOM content to load
             print("Page loaded.")  # Debugging statement
 
             # Wait for the table tab to be clickable and click it
-            page.wait_for_selector("xpath=/html/body/form/div[5]/div[5]/ul/li[4]/a", timeout=300000)
-            page.click("xpath=/html/body/form/div[5]/div[5]/ul/li[4]", timeout=300000)
+            page.wait_for_selector("xpath=/html/body/form/div[5]/div[5]/ul/li[4]/a", timeout=120000)
+            page.click("xpath=/html/body/form/div[5]/div[5]/ul/li[4]", timeout=120000)
             print("Clicked on the table tab.")  # Debugging statement
 
             # Wait for the all button to be clickable and click it
-            page.wait_for_selector("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]", timeout=300000)
-            page.click("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]", timeout=300000)
+            page.wait_for_selector("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]", timeout=120000)
+            page.click("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]", timeout=120000)
             print("Clicked on the 'All' button.")  # Debugging statement
             print("Waiting for the page to update...")  # Debugging statement
             page.wait_for_timeout(2000)
@@ -584,8 +559,8 @@ def scrape_address_data(address, listing_id):
             'market_trends': json.dumps(metrics)
         }).eq('listing_id', listing_id).execute()
     except Exception as e:
-        print(f"Failed to update Supabase: {e}")
-        update_flags(listing_id, "Failed to update Supabase.")
+        print(f"Failed to update Supabase Market Trends: {e}")
+        update_flags(listing_id, "Failed to update Supabase Market Trends.")
 
     return metrics
 
