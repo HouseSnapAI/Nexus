@@ -154,11 +154,20 @@ def scrape_home_details(address, listing_id):
     url = "https://www.homes.com/routes/res/consumer/property/autocomplete"
     print(f"url {url}")
     headers = {
-        "accept": "application/json",
-        "content-type": "application/json-patch+json",
-        "referer": "https://www.homes.com/",
-        "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36"
-    }
+    "accept": "application/json",
+    "accept-language": "en-US,en;q=0.9",
+    "content-type": "application/json-patch+json",
+    "origin": "https://www.homes.com",
+    "priority": "u=1, i",
+    "referer": "https://www.homes.com/",
+    "sec-ch-ua": '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"macOS"',
+    "sec-fetch-dest": "empty",
+    "sec-fetch-mode": "cors",
+    "sec-fetch-site": "same-origin",
+    "user-agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) EdgiOS/117.0.2045.48 Version/17.0 Mobile/15E148 Safari/604.1"
+}
     print(f"headers {headers}")
     body = {
         "term": address,
