@@ -173,6 +173,7 @@ def scrape_home_details(page, address, listing_id):
     home_details = {}
 
     try:
+        print("Fetching price...")
         home_details["price"] = page.query_selector("#price").inner_text()
     except Exception as e:
         print(f"Error fetching price: {e}")
@@ -180,6 +181,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching price.")
 
     try:
+        print("Fetching views...")
         home_details["views"] = page.query_selector(".total-views").inner_text()
     except Exception as e:
         print(f"Error fetching views: {e}")
@@ -187,6 +189,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching views.")
 
     try:
+        print("Fetching highlights...")
         home_details["highlights"] = [
             highlight.query_selector(".highlight-value").inner_text().strip()
             for highlight in page.query_selector_all("#highlights-section .highlight")
@@ -197,6 +200,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching highlights.")
 
     try:
+        print("Fetching home details...")
         home_details["home_details"] = [
             {
                 "label": subcategory.query_selector(".amenity-name").inner_text().strip(),
@@ -210,6 +214,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching home details.")
 
     try:
+        print("Fetching neighborhood KPIs...")
         home_details["neighborhood_kpis"] = [
             {
                 "title": kpi.query_selector(".neighborhood-kpi-card-title").inner_text(),
@@ -223,6 +228,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching neighborhood KPIs.")
 
     try:
+        print("Fetching tax history...")
         home_details["tax_history"] = [
             {
                 "year": row.query_selector(".tax-year").inner_text().strip(),
@@ -239,6 +245,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching tax history.")
 
     try:
+        print("Fetching price history...")
         home_details["price_history"] = [
             {
                 "date": row.query_selector(".price-year .long-date").inner_text().strip(),
@@ -255,6 +262,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching price history.")
 
     try:
+        print("Fetching deed history...")
         home_details["deed_history"] = [
             {
                 "date": row.query_selector(".deed-date .shorter-date").inner_text().strip(),
@@ -270,6 +278,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching deed history.")
 
     try:
+        print("Fetching mortgage history...")
         home_details["mortgage_history"] = [
             {
                 "date": row.query_selector(".mortgage-date .shorter-date").inner_text().strip(),
@@ -285,6 +294,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching mortgage history.")
 
     try:
+        print("Fetching transportation details...")
         home_details["transportation"] = [
             {
                 "type": item.query_selector(".transportation-type").inner_text().strip(),
@@ -299,6 +309,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching transportation.")
 
     try:
+        print("Fetching bike score...")
         home_details["bike_score"] = {
             "tagline": page.query_selector("#score-card-container .bike-score .score-card-tagline").inner_text().strip(),
             "score": page.query_selector("#score-card-container .bike-score .score-scoretext").inner_text().strip()
@@ -309,6 +320,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching bike score.")
 
     try:
+        print("Fetching walk score...")
         home_details["walk_score"] = {
             "tagline": page.query_selector("#score-card-container .walk-score .score-card-tagline").inner_text().strip(),
             "score": page.query_selector("#score-card-container .walk-score .score-scoretext").inner_text().strip()
@@ -319,6 +331,7 @@ def scrape_home_details(page, address, listing_id):
         update_flags(listing_id, "Error fetching walk score.")
 
     def convert_tax_history(data):
+        print("Converting tax history...")
         # Extract tax history
         tax_history = data.get("tax_history", [])
 
@@ -337,9 +350,11 @@ def scrape_home_details(page, address, listing_id):
 
     scraper_home_tax = convert_tax_history(home_details)
     try:
+        print("Updating home details in Supabase...")
         supabase.table('reports').update({
             'home_details': json.dumps(home_details)
         }).eq('listing_id', listing_id).execute()
+        print("Home details updated successfully.")
     except Exception as e:
         print(f"Failed to update home details: {e}")
         update_flags(listing_id, "Failed to update home details.")
