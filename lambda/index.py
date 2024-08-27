@@ -224,7 +224,7 @@ def scrape_home_details(page, address, listing_id):
                 "land": row.query_selector(".tax-land").inner_text().strip(),
                 "improvement": row.query_selector(".tax-improvement").inner_text().strip()
             }
-            for row in page.query_selector_all("#tax-history-container .tax-table .tax-table-body .tax-table-body-row", timeout=120000)
+            for row in page.query_selector_all("#tax-history-container .tax-table .tax-table-body .tax-table-body-row")
         ]
     except Exception as e:
         print(f"Error fetching tax history: {e}")
@@ -240,7 +240,7 @@ def scrape_home_details(page, address, listing_id):
                 "change": row.query_selector(".price-change").inner_text().strip(),
                 "sq_ft_price": row.query_selector(".price-sq-ft").inner_text().strip()
             }
-            for row in page.query_selector_all("#price-history-container .price-table .table-body-row", timeout=120000)
+            for row in page.query_selector_all("#price-history-container .price-table .table-body-row")
         ]
     except Exception as e:
         print(f"Error fetching price history: {e}")
@@ -255,7 +255,7 @@ def scrape_home_details(page, address, listing_id):
                 "sale_price": row.query_selector(".deed-sale-price").inner_text().strip(),
                 "title_company": row.query_selector(".deed-title-company").inner_text().strip()
             }
-            for row in page.query_selector_all("#deed-history-container .deed-table .deed-table-body-row", timeout=120000)
+            for row in page.query_selector_all("#deed-history-container .deed-table .deed-table-body-row")
         ]
     except Exception as e:
         print(f"Error fetching deed history: {e}")
@@ -270,7 +270,7 @@ def scrape_home_details(page, address, listing_id):
                 "loan_amount": row.query_selector(".mortgage-amount").inner_text().strip(),
                 "loan_type": row.query_selector(".mortgage-type").inner_text().strip()
             }
-            for row in page.query_selector_all("#mortgage-history-container .mortgage-table .table-body-row", timeout=120000)
+            for row in page.query_selector_all("#mortgage-history-container .mortgage-table .table-body-row")
         ]
     except Exception as e:
         print(f"Error fetching mortgage history: {e}")
@@ -354,7 +354,7 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
         browser = p.chromium.launch(
             headless=True,
             args=args,
-            timeout=120000,
+            timeout=300000,
             proxy=proxy
         )
         print("Browser launched successfully.")
@@ -366,18 +366,18 @@ def scrape_schooldigger(street_line, city, state, zipcode, lat, long, listing_id
 
         try:
             print(f"Navigating to URL: {url}")  # Debugging statement
-            page.goto(url, timeout=120000)  # Increase timeout to 120 seconds
-            page.wait_for_load_state("domcontentloaded", timeout=120000)  # Wait for DOM content to load
+            page.goto(url, timeout=300000)  # Increase timeout to 120 seconds
+            page.wait_for_load_state("domcontentloaded", timeout=300000)  # Wait for DOM content to load
             print("Page loaded.")  # Debugging statement
 
             # Wait for the table tab to be clickable and click it
-            page.wait_for_selector("xpath=/html/body/form/div[5]/div[5]/ul/li[4]/a", timeout=120000)
-            page.click("xpath=/html/body/form/div[5]/div[5]/ul/li[4]", timeout=120000)
+            page.wait_for_selector("xpath=/html/body/form/div[5]/div[5]/ul/li[4]/a", timeout=300000)
+            page.click("xpath=/html/body/form/div[5]/div[5]/ul/li[4]", timeout=300000)
             print("Clicked on the table tab.")  # Debugging statement
 
             # Wait for the all button to be clickable and click it
-            page.wait_for_selector("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]", timeout=120000)
-            page.click("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]", timeout=120000)
+            page.wait_for_selector("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]", timeout=300000)
+            page.click("xpath=/html/body/form/div[5]/div[6]/div[3]/div[1]/a[8]", timeout=300000)
             print("Clicked on the 'All' button.")  # Debugging statement
             print("Waiting for the page to update...")  # Debugging statement
             page.wait_for_timeout(2000)
