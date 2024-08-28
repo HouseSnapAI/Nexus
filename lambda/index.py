@@ -75,10 +75,8 @@ def calculate_crime_score(county: str, city: str, listing_id: str):
     try:
         if city_data:
             data_to_process = city_data
-            print(f"Processing city-level data for {city}")
         else:
             data_to_process = county_data
-            print(f"Processing county-level data for {county}")
     except Exception as e:
         print(f"Error determining data to process: {e}")
         update_flags(listing_id, "Error determining data to process.")
@@ -88,10 +86,6 @@ def calculate_crime_score(county: str, city: str, listing_id: str):
     try:
         # Calculate the scores
         for res in range(len(data_to_process)):
-            print(f"Processing item {res + 1} of {len(data_to_process)}")
-
-            # Print the response data for the current item
-            print(data_to_process[res])
 
             averages = []
             for i in range(2012, 2023):
@@ -102,7 +96,6 @@ def calculate_crime_score(county: str, city: str, listing_id: str):
                     if divisor != 0:
                         result = data_to_process[res]['all_violent_crime_trend'][1][f'{i}'] / divisor
                         averages.append(result)
-                        print(f"Year: {i}, Result: {result}")
                 except KeyError:
                     print(f"Year: {i} data is missing or incomplete.")
                     continue
@@ -116,7 +109,6 @@ def calculate_crime_score(county: str, city: str, listing_id: str):
 
             # Store the score
             scores.append(score_10)
-            print(f"Score for item {res + 1}: {score_10}")
     except Exception as e:
         print(f"Error calculating scores: {e}")
         update_flags(listing_id, "Error calculating scores.")
@@ -633,7 +625,6 @@ def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="f
     minimum_comps = 3
     
     while radius <= max_radius:
-        print(f"Fetching properties within {radius} miles...")
         try:
             properties = scrape_property(
                 location=address,
@@ -644,7 +635,6 @@ def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="f
 
             # Check if the response is valid and not empty
             if properties is None or properties.empty:
-                print(f"No valid properties found in the response at radius {radius}.")
                 radius += radius_step
                 continue
 
@@ -655,27 +645,21 @@ def get_rent_insights(address, sqft, listing_id, estimated_value,listing_type="f
 
         # Check if 'list_price' exists in the DataFrame
         if 'list_price' not in properties.columns:
-            print("Warning: 'list_price' column not found in the dataset.")
             return {"message": "Error: 'list_price' column not found in the dataset."}
 
         # Step 2: Filter properties with valid rent (list_price), sqft, assessed/estimated price
         try:
-            print("Started to filtered")
             filtered_properties = properties[
                 (properties['list_price'].notna()) &
                 (properties['sqft'].notna()) &
                 ((properties['assessed_value'].notna()) | (properties['estimated_value'].notna()))
             ].copy()
-            print("filtered successfully")
             # Filter properties within 5% of the target square footage and price
-            print("starting calculations")
             sqft_lower_bound = sqft * 0.95
             sqft_upper_bound = sqft * 1.05
             price_lower_bound = estimated_value * 0.95
             price_upper_bound = estimated_value * 1.05
-            print("Calculations successful")
             
-            print("starting filtering")
             filtered_properties = filtered_properties[
                 (filtered_properties['sqft'] >= sqft_lower_bound) & 
                 (filtered_properties['sqft'] <= sqft_upper_bound) & 
@@ -915,8 +899,6 @@ def fetch_city_census_data(city_name, listing_id):
                 "Name": census_data['geography'][geo_id]['name']
             })
 
-    print(f"Appended census data: {geo_entry['name']}")
-
     supabase.table('reports').update({
         'census_data': json.dumps(structured_data)
     }).eq('listing_id', listing_id).execute()
@@ -999,8 +981,6 @@ def handler(event, context):
             # CRIME SCORE
             try:
                 crime_score, data_to_process = calculate_crime_score(county, city, listing_id)
-                print(f"Crime score: {crime_score}")
-                print(f"Data to process: {data_to_process}")
                 update_status(listing_id, "crime_done", client_id)
             except Exception as e:
                 print(f"Error calculating crime score or updating status: {e}")
@@ -1029,7 +1009,7 @@ def handler(event, context):
             
             try:
                 print("scraping home details")
-                scrape_home_details(f'{street_line},{city}', listing_id)
+                scrape_home_details(f'{street_line} {city}', listing_id)
                 update_status(listing_id, "home_details_done", client_id)
             except Exception as e:
                 print(f"Error in scrape_home_details: {str(e)}")
