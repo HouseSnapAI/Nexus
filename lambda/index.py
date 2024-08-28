@@ -9,6 +9,7 @@ import requests
 from bs4 import BeautifulSoup
 import json
 import numpy as np
+from requests import Request, Session
 
 args=['--disable-gpu',
       '--single-process',
@@ -21,8 +22,9 @@ args=['--disable-gpu',
 ignore_default_args = ["--enable-automation"]
 
 proxies = {
-        "http": "http://hizxybhc:7etyqbb24fqo@207.228.7.25:7207",
-    }
+    "http": "http://hizxybhc:7etyqbb24fqo@207.228.7.25:7207",
+    "https": "http://hizxybhc:7etyqbb24fqo@207.228.7.25:7207"
+}
 
 # Initialize Supabase client
 SUPABASE_URL = os.getenv('SUPABASE_URL')
@@ -153,7 +155,7 @@ def scrape_home_details(address, listing_id):
         "priority": "u=1, i",
         "referer": "https://www.homes.com/",
         "sec-ch-ua": '"Not)A;Brand";v="99", "Google Chrome";v="127", "Chromium";v="127"',
-        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-mobile": "?1", # changed to ?1
         "sec-ch-ua-platform": '"macOS"',
         "sec-fetch-dest": "empty",
         "sec-fetch-mode": "cors",
@@ -170,8 +172,22 @@ def scrape_home_details(address, listing_id):
         "placeOnlySearch": False
     }
     print(f"body {body}")
+
+    # Create a session
+    session = Session()
+    request = Request('POST', url, headers=headers, json=body)
+    prepared_request = session.prepare_request(request)
+
+    # Print the request as a cURL command
+    curl_command = f"curl -X {prepared_request.method} '{prepared_request.url}'"
+    for k, v in prepared_request.headers.items():
+        curl_command += f" -H '{k}: {v}'"
+    if prepared_request.body:
+        curl_command += f" -d '{prepared_request.body.decode('utf-8')}'"
+    print(f"cURL command: {curl_command}")
+
     try:
-        response = requests.post(url, headers=headers, json=body, timeout=30, proxies=proxies)
+        response = session.send(prepared_request, timeout=30, proxies=proxies)
         response.raise_for_status()
         print(f"response {response}")
         data = response.json()
